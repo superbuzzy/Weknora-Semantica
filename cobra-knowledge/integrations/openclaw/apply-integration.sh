@@ -52,13 +52,13 @@ copy_plugin() {
 copy_plugin knowledge
 copy_plugin openviking
 
-cat > "$OUTPUT/LEECLAW-V0.5-DERIVED.txt" <<'TXT'
-This is a derived OpenClaw build tree assembled by LeeClaw v0.5.
+cat > "$OUTPUT/LEECLAW-V0.6-DERIVED.txt" <<'TXT'
+This is a derived OpenClaw build tree assembled by LeeClaw v0.6.
 No upstream OpenClaw file was modified in place.
 Added workspace extensions:
 - extensions/leeclaw-knowledge
 - extensions/leeclaw-openviking
-OpenViking's official context-engine plugin remains an external upstream plugin and must be installed/configured separately.
+OpenViking memory is connected by the identity-aware leeclaw-openviking hooks; do not configure the upstream static-user context-engine plugin in multi-user LeeClaw.
 TXT
 
 echo "PASS derived OpenClaw tree: $OUTPUT"

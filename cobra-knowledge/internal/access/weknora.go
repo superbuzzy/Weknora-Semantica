@@ -11,7 +11,8 @@ import (
 )
 
 // WeKnoraAccessChecker delegates authorization to WeKnora instead of duplicating its RBAC.
-// The caller's supported WeKnora identity headers are forwarded to the standard KB read API.
+// Only the LeeClaw service credential plus server-issued workspace/user principal are forwarded.
+// User-facing WeKnora bearer identities are intentionally not accepted in v0.6.
 type WeKnoraAccessChecker struct {
 	BaseURL string
 	Client  *http.Client
@@ -30,7 +31,7 @@ func (a *WeKnoraAccessChecker) CheckKnowledgeBaseAccess(ctx context.Context, kbI
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"Authorization", "X-API-Key", "X-Tenant-ID", "X-External-User-ID", "X-External-User-Token", "Accept-Language"} {
+	for _, name := range []string{"X-API-Key", "X-Tenant-ID", "X-External-User-ID", "Accept-Language"} {
 		if value := headers.Get(name); value != "" {
 			req.Header.Set(name, value)
 		}
