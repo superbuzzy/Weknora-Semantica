@@ -1,0 +1,12 @@
+{
+  "default_source_priority": {
+    "business_data": 1.0,
+    "GIS": 0.95,
+    "PMS": 0.90,
+    "entity_graph": 0.80,
+    "weknora": 0.60,
+    "document": 0.55
+  },
+  "predicates": {},
+  "default_delta": 0.05
+}

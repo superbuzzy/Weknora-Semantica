@@ -1,0 +1,5 @@
+bin/
+out/
+dist/
+*.zip
+.DS_Store
