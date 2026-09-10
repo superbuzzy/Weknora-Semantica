@@ -1,0 +1,9 @@
+[submodule "upstream/openclaw"]
+	path = upstream/openclaw
+	url = https://github.com/openclaw/openclaw.git
+[submodule "upstream/openviking"]
+	path = upstream/openviking
+	url = https://github.com/volcengine/OpenViking.git
+[submodule "upstream/weknora"]
+	path = upstream/weknora
+	url = https://github.com/Tencent/WeKnora.git
