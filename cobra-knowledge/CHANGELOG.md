@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.0
+
+- 新增正式 `ontology.Registry` 抽象与默认 `FSRegistry`。
+- 本体版本注册后不可变，并使用 SHA-256 校验内容完整性。
+- 发布状态与本体 payload 分离，新增 `active_version` 指针。
+- KB Binding 支持 `active` 与 `pinned`。
+- 支持历史 published 版本重新激活，实现指针级回滚。
+- 新增 Registry append-only 审计事件。
+- 新增 `approve-ontology`、`registry-register`、`registry-publish`、`registry-activate`、`registry-bind`、`registry-resolve` CLI。
+- Graph API 的 ontology 视图由文件路径绑定切换到 Registry 解析；原 WeKnora 图谱 GET 契约不变。
+- 新增 Registry REST 治理 API，并与 WeKnora 用户身份分离为独立管理员 Token。
+- Context MCP 支持从 Registry 获取正式本体。
+- v0.4 不新增任何 WeKnora Overlay 或后端修改。
+
 ## v0.3.0
 
 ### Graph visualization

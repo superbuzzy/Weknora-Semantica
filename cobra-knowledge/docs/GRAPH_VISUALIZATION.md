@@ -1,4 +1,4 @@
-# v0.3 三图可视化：实体图 / 本体图切换
+# v0.4 三图可视化：实体图 / 本体图切换
 
 ## 1. 目标
 
@@ -76,7 +76,7 @@ CobraKnowledge 新增只读 `Neo4jHTTPSource`，按照 WeKnora 当前 `ENTITY<kb
 export COBRA_NEO4J_URL=http://neo4j:7474
 export COBRA_NEO4J_USER=neo4j
 export COBRA_NEO4J_PASSWORD='***'
-export COBRA_ONTOLOGY_BINDINGS=/app/configs/ontology-bindings.json
+export COBRA_ONTOLOGY_REGISTRY_ROOT=/app/data/ontology-registry
 export COBRA_WEKNORA_BASE_URL=http://weknora:8080
 export COBRA_GRAPH_AUTH_MODE=weknora
 
@@ -95,17 +95,16 @@ GET /healthz
 
 ## 5. 本体与知识库绑定
 
-`configs/ontology-bindings.json`：
+v0.4 不再由 Graph API 读取 `ontology-bindings.json`。绑定进入 Ontology Registry，支持 active / pinned 两种模式：
 
-```json
-{
-  "knowledge_bases": {
-    "weknora-kb-id": "../ontologies/distribution-network/1.0.0.json"
-  }
-}
+```text
+KB -> ontology_id -> active published version
+KB -> ontology_id@version   (pinned)
 ```
 
-绑定关系单独保存，不写进 Ontology 本体，也不写入 WeKnora 数据库。同一正式本体可以绑定多个知识库。
+本体 payload 注册后不可变；发布和回滚只修改 Registry Manifest 与 active 指针。详见 `docs/ONTOLOGY_REGISTRY.md`。
+
+旧 `configs/ontology-bindings.example.json` 仅作为 v0.3 迁移参考，不再是生产运行配置。
 
 ## 6. 权限
 
@@ -127,7 +126,7 @@ GET /api/v1/knowledge-bases/{kb_id}
 
 ## 7. WeKnora Overlay
 
-不在 upstream checkout 上直接改代码。v0.3 提供：
+不在 upstream checkout 上直接改代码。v0.3 起提供，v0.4 原样沿用：
 
 ```text
 integrations/weknora/
@@ -145,7 +144,7 @@ integrations/weknora/
 ```bash
 ./integrations/weknora/apply-overlay.sh \
   ../upstream/weknora \
-  ../build/weknora-v0.3
+  ../build/weknora-v0.4
 ```
 
 脚本复制出派生构建树后再应用补丁。`upstream/weknora` 不产生修改，因此以后仍可正常 `git pull`。如果官方 `GraphSettings.vue` 发生破坏性变化，补丁 dry-run 会直接失败，要求人工更新这一处适配，而不是静默覆盖官方新逻辑。
@@ -165,7 +164,7 @@ location /cobra-knowledge/ {
 
 前端默认 `VITE_COBRA_KNOWLEDGE_API_BASE=/cobra-knowledge`。同源部署时不需要 CORS。
 
-## 9. v0.3 暂不做的内容
+## 9. 当前仍保持的边界
 
 - 不把 Wiki 图并入 GraphExplorer；Wiki 图继续使用官方成熟 Wiki Browser。
 - 不把正式本体强制写入 WeKnora Neo4j Schema；GraphView 是显示契约，不是存储耦合。

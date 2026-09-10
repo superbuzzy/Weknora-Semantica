@@ -32,6 +32,8 @@ type GraphViewMeta struct {
 	Truncated       bool   `json:"truncated"`
 	OntologyID      string `json:"ontology_id,omitempty"`
 	OntologyVersion string `json:"ontology_version,omitempty"`
+	OntologyState   string `json:"ontology_state,omitempty"`
+	BindingMode     string `json:"binding_mode,omitempty"`
 }
 
 // GraphView is the only graph shape the WeKnora overlay consumes.
