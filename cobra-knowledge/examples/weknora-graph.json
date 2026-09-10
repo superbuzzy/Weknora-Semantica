@@ -1,0 +1,28 @@
+{
+  "domain": "distribution_network",
+  "knowledge_base_id": "kb-demo",
+  "knowledge_id": "doc-demo",
+  "graph": {
+    "node": [
+      {
+        "name": "金牛线",
+        "chunks": ["c1", "c2"],
+        "attributes": ["__type__=线路", "__aliases__=10kV金牛线", "电压等级=10kV", "转供状态=不可转供"]
+      },
+      {
+        "name": "一号台区",
+        "chunks": ["c2"],
+        "attributes": ["__type__=台区"]
+      },
+      {
+        "name": "金牛变",
+        "chunks": ["c1"],
+        "attributes": ["__type__=变电站"]
+      }
+    ],
+    "relation": [
+      {"node1": "金牛线", "node2": "一号台区", "type": "供电"},
+      {"node1": "金牛线", "node2": "金牛变", "type": "所属"}
+    ]
+  }
+}

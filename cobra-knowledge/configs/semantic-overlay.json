@@ -1,0 +1,22 @@
+{
+  "classes": {
+    "线路": {
+      "aliases": ["馈线", "配电线路", "10kV线路"]
+    }
+  },
+  "properties": {
+    "转供状态": {
+      "aliases": ["转供能力", "能否转供"],
+      "preferred_sources": ["entity_graph"]
+    },
+    "负载率": {
+      "aliases": ["最大负载率", "当前负载率"],
+      "preferred_sources": ["business_data"]
+    }
+  },
+  "relations": {
+    "供电": {
+      "aliases": ["供给", "供带"]
+    }
+  }
+}
