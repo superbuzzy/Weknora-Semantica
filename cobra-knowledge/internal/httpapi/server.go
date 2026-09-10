@@ -33,7 +33,7 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
-	// Stable WeKnora-facing API. v0.5 keeps this route unchanged.
+	// Stable WeKnora-facing API. v0.6 keeps this route unchanged.
 	mux.HandleFunc("GET /api/v1/knowledge-bases/{kbID}/graph", s.graph)
 
 	// CobraKnowledge governance API. These routes are not called by the WeKnora overlay.
@@ -50,7 +50,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "version": "0.5.0"})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "version": "0.6.0"})
 }
 
 func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
@@ -306,7 +306,7 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 		if origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key, X-Tenant-ID, X-External-User-ID, X-External-User-Token, X-Cobra-Admin-Token, X-Cobra-Actor")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Tenant-ID, X-External-User-ID, X-Cobra-Admin-Token, X-Cobra-Actor")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
