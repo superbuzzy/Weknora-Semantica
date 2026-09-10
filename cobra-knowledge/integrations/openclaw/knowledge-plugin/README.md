@@ -1,23 +1,32 @@
-# LeeClaw Knowledge OpenClaw Plugin
+# leeclaw-knowledge v0.6
 
-OpenClaw 原生 Knowledge 页面。UI 由 OpenClaw Control UI Plugin 承载，WeKnora 只作为知识能力后端；本体图通过现有 Graph API 读取，不复制 WeKnora 前端代码。
+OpenClaw 原生 Knowledge Control UI Plugin。页面属于 OpenClaw，Knowledge Engine 仍为 WeKnora，本体图由 LeeClaw Ontology Registry 提供。
 
-## 边界
+## Identity
 
-- 不修改 OpenClaw core/UI 源码；
-- 不修改 WeKnora 后端；
-- OpenClaw 页面不直接写 WeKnora API 路径，统一经插件 runtime adapter；
-- 实体图与本体图使用同一个 `GraphView`；
-- `X-External-User-ID` 可由 OpenClaw `authenticatedUserId` 自动透传。
+唯一用户来源：
 
-## 当前 v0.5 页面
+```text
+OpenClaw authenticatedUserProfile.profileId
+```
 
-- 知识库列表与创建；
-- 文档列表；
-- Wiki 页面列表；
-- 实体图 / 本体图；
-- Workspace 成员；
-- KB 分享；
-- KB 审计活动。
+插件 Gateway Method 强制 `profileAccess=required`。browser 不能传 user/tenant；服务端固定生成：
 
-更复杂的文件上传、Chunk 编辑、FAQ、Datasource、邀请与分享写操作沿相同 Adapter Contract 后续扩展，不需要改 OpenClaw 主干。
+```text
+X-API-Key          = weknoraApiKey
+X-Tenant-ID        = weknoraTenantId
+X-External-User-ID = profileId
+```
+
+旧的 `weknoraBearerToken/externalUserId/forwardAuthenticatedUser/tenantId` 配置已删除。
+
+## UI / API boundary
+
+browser 只调用 `leeclaw.knowledge.*`。WeKnora URL、API key、Tenant 和 External Principal 只存在于 runtime Adapter。
+
+本体/实体图继续使用同一 GraphView：
+
+```text
+view=entity   -> WeKnora entity graph
+view=ontology -> Ontology Registry
+```

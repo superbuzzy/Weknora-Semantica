@@ -1,74 +1,38 @@
-# v0.5 模块与代码职责
+# v0.6 模块与代码职责
+
+## OpenClaw integrations
+
+### `integrations/openclaw/knowledge-plugin`
+OpenClaw 原生 Knowledge UI + Gateway/BFF。`lib/principal.js` 只从 durable OpenClaw profile 生成用户主体；`lib/weknora-client.js` 只负责 WeKnora 协议适配。
+
+### `integrations/openclaw/openviking-plugin`
+OpenClaw 原生 Memory/Skill UI + OpenViking Adapter。
+
+- `lib/principal.js`：Gateway profile / Session creator -> trusted principal；
+- `lib/client.js`：OpenViking HTTP API；
+- `lib/memory-runtime.js`：identity-aware recall/capture/commit hooks。
 
 ## Knowledge Core
 
 ### `internal/ontology`
-
-本体发现、审核、发布、Registry、active/pinned KB Binding 与不可变版本。继续作为本体 Source of Truth。
+Ontology Registry、审核快照、不可变版本、publish/activate/binding/audit。
 
 ### `internal/graphview`
-
-- WeKnora Neo4j Entity Graph 只读 Adapter；
-- Ontology -> GraphView；
-- RegistryOntologySource。
-
-### `internal/retrieval`
-
-Semantic Catalog、Planner、Arbiter。负责 Agent 查询策略与可信裁决，不负责 Knowledge 管理页面。
-
-### `internal/context`
-
-并发 Retriever 与 Context Pack 装配。
+Entity/Ontology -> stable GraphView projection。
 
 ### `internal/access`
+Graph API 对 WeKnora 的授权委托。v0.6 只转发服务 API Key、Tenant 与 OpenClaw External Principal，不再转发人类 Bearer。
 
-Graph API 访问检查委托 WeKnora。v0.5 增加 API Key 与外部用户身份头透传，保持授权规则由 WeKnora 决定。
+### `internal/retrieval` / `internal/arbitration` / Context
+负责语义解析、检索计划、证据仲裁和 Context Pack；与 Knowledge 管理 UI 分离。
 
-## OpenClaw Integration
+## Contracts / Compatibility
 
-### `integrations/openclaw/knowledge-plugin`
+### `compatibility/upstreams-v0.6.json`
+记录经过验证的三套上游版本和依赖契约。
 
-OpenClaw 原生 Knowledge Control UI + plugin runtime BFF。
+### `scripts/check-v0.6-upstreams.sh`
+检查 OpenClaw durable profile/session/hook、WeKnora API principal/API key scope、OpenViking trusted principal 等关键扩展契约。
 
-浏览器：
-
-- KB list/create；
-- Documents；
-- Wiki；
-- Entity/Ontology Graph；
-- Members/Shares；
-- Activity。
-
-Runtime Adapter：`lib/weknora-client.js`，集中保存 WeKnora REST 路径、身份头和返回值归一逻辑。
-
-### `integrations/openclaw/openviking-plugin`
-
-OpenClaw 原生 Memory/Skills Control UI。
-
-Runtime Adapter：`lib/client.js`，调用 OpenViking Session/Search/Skills API。
-
-它不承担 OpenViking context-engine；真正 Memory Runtime 使用官方插件。
-
-### `integrations/openclaw/apply-integration.sh`
-
-从干净 OpenClaw 生成派生构建树，并将两个自研插件加入 `extensions/*`。不修改上游源目录。
-
-## OpenViking Integration
-
-### `integrations/openviking/README.md`
-
-规定官方 context-engine 的使用方式与 Memory/Skill 边界。
-
-## Compatibility
-
-### `compatibility/upstreams-v0.5.json`
-
-记录当前已验证上游源码版本及依赖契约。
-
-### `scripts/check-v0.5-upstreams.sh`
-
-源码级 Compatibility Gate。
-
-### `scripts/verify-v0.5.sh`
-
-Go + JS + Browser isolation 的本地发布门禁。
+### `scripts/verify-v0.6.sh`
+本地发布门禁：Go、JS、Principal/Adapter/Runtime tests、browser isolation、legacy identity removal。

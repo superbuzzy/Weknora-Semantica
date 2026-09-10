@@ -1,232 +1,86 @@
-# LeeClaw Knowledge Core v0.5
+# LeeClaw Knowledge Core v0.6
 
-> OpenClaw 为 Agent 主干，WeKnora 为企业知识引擎，OpenViking 为 Memory + Skill 引擎；本目录保留历史 `cobra-knowledge` 工程名，以避免 v0.5 为改名引入无关风险。
+> 本目录仍保留历史 `cobra-knowledge` 工程名，避免为了命名重构制造无关 Git 噪声。v0.6 的重点是身份与运行边界收口。
 
-v0.5 的目标不是把三套上游揉成一个 Fork，而是把它们通过 **OpenClaw Plugin + Adapter Contract + 独立知识治理内核** 组装成一个可持续升级的产品骨架。
-
-## v0.5 总体结构
-
-```mermaid
-flowchart TB
-    UI[OpenClaw Control UI\n统一产品主界面]
-    AR[OpenClaw Agent Runtime]
-
-    UI --> CHAT[对话]
-    UI --> KP[Knowledge Plugin\n原生 OpenClaw 页面]
-    UI --> MP[Memory Plugin\n原生 OpenClaw 页面]
-    UI --> SP[Skills Plugin\n原生 OpenClaw 页面]
-    CHAT --> AR
-
-    KP --> KAD[WeKnora Adapter / BFF]
-    KAD --> WK[WeKnora\nKB / Document / Wiki / Sharing / RBAC]
-
-    MP --> OAD[OpenViking Adapter]
-    SP --> OAD
-    OAD --> OV[OpenViking\nMemory / Session / Experience / Skill]
-
-    AR --> OVP[OpenViking 官方 Context Engine Plugin]
-    OVP --> OV
-
-    AR --> MCP[Context MCP]
-    MCP --> CORE[Knowledge Core\nOntology / Planner / Arbiter / Context]
-    CORE --> WK
-    CORE --> ONT[Ontology Registry]
-    CORE --> DATA[Business API / MCP]
-```
-
-## v0.5 已实现
-
-### OpenClaw 原生 Knowledge 页面
-
-`integrations/openclaw/knowledge-plugin` 是正式 OpenClaw Control UI Plugin，不使用 iframe，不复制 WeKnora Vue 页面。
-
-当前提供：
-
-- 知识库列表与创建；
-- 文档列表与解析状态查看；
-- Wiki 页面列表；
-- 实体图 / 本体图统一查看；
-- Workspace 成员查看；
-- Knowledge Base 分享关系查看；
-- Knowledge Base 审计活动查看。
-
-浏览器代码只调用 `leeclaw.knowledge.*` Gateway 方法，不包含 WeKnora `/api/v1/...` 路径。WeKnora API 变化由插件 runtime 的 Adapter 层吸收。
-
-### OpenClaw 原生 Memory / Skills 页面
-
-`integrations/openclaw/openviking-plugin` 提供两个原生 Control UI Tab：
-
-- `Memory`：最近 Session 与长期记忆检索；
-- `Skills`：Skill 列表、语义查找与 `SKILL.md` 查看。
-
-Skill 的唯一权威源仍为 OpenViking：
+## 核心定位
 
 ```text
-viking://user/{user_id}/skills   个人 Skill
-viking://agent/skills            Account/Agent 共享 Skill
+OpenClaw       = 唯一用户身份 + Agent Runtime + UI Host
+WeKnora        = Knowledge Engine
+OpenViking     = Memory + Skill Engine
+Knowledge Core = Ontology + Retrieval + Arbiter + Context
 ```
 
-### OpenViking 仍负责真正的 Memory Runtime
-
-v0.5 **不重新实现** OpenViking 的记忆生命周期。Agent Runtime 使用 OpenViking 官方 `@openviking/openclaw-plugin`：
+### v0.6 新的 Principal 链
 
 ```text
-assemble   -> 回复前召回 Memory
-
-afterTurn -> 每轮对话写 Session
-
-compact    -> Commit / 精炼长期 Memory
+OpenClaw authenticatedUserProfile.profileId
+        │
+        ├─ Knowledge Plugin
+        │      └─ X-External-User-ID -> WeKnora
+        │
+        └─ OpenViking Plugin
+               └─ X-OpenViking-User -> OpenViking
 ```
 
-建议仅召回 `user + agent`，保持 `enableAddResourceTool=false`，避免把企业知识同时维护到 OpenViking Resources 与 WeKnora 两处。
-
-### 本体图继续属于 Knowledge
-
-现有 Ontology Registry、版本发布、KB Binding、回滚以及 `Ontology -> GraphView` 全部保留。
-
-OpenClaw Knowledge 页面中的图谱结构为：
-
-```text
-Knowledge
-└── 图谱
-    ├── 实体图 -> WeKnora Neo4j / GraphRAG
-    └── 本体图 -> Ontology Registry
-```
-
-两种图继续使用稳定 `GraphView` 契约，UI 不知道底层 Neo4j 或本体存储格式。
-
-## 低耦合边界
-
-| 资产/能力 | Source of Truth | v0.5 接入方式 |
-|---|---|---|
-| Agent Runtime | OpenClaw | 原生，不改运行主干 |
-| 企业知识库/文档/Wiki | WeKnora | Knowledge Adapter |
-| Knowledge 用户/成员/共享/隔离 | WeKnora | 权限头 + API，后端最终裁决 |
-| Entity Graph | WeKnora | Graph Adapter，只读 |
-| Ontology | 自研 Ontology Registry | GraphView / Semantic Catalog |
-| Memory/Session/Experience | OpenViking | 官方 Context Engine + Adapter |
-| Skill | OpenViking | `/api/v1/skills` + 官方 `ov_*` 工具 |
-| 实时业务数据 | Business API/MCP | Retrieval Planner 按需调用 |
-
-四条工程规则：
-
-1. 上游已有 Plugin/API 的能力，不修改上游内核；
-2. OpenClaw 浏览器页面不直接调用 WeKnora/OpenViking API；
-3. 每类资产只有一个 Source of Truth；
-4. 上游升级由 Contract Test / Compatibility Gate 先验证，差异优先收敛在 Adapter。
+`tenant/account` 均由服务端 Workspace 配置产生；browser 无法覆盖。
 
 ## 目录
 
 ```text
-cobra-knowledge/
-├── internal/                         # 既有 Knowledge Core
-├── cmd/                              # CLI / Context MCP / Graph API
-├── integrations/
-│   ├── openclaw/
-│   │   ├── knowledge-plugin/         # OpenClaw 原生 Knowledge UI + WeKnora BFF
-│   │   ├── openviking-plugin/        # OpenClaw 原生 Memory / Skills UI
-│   │   └── apply-integration.sh      # 从干净 OpenClaw 生成派生构建树
-│   ├── openviking/                   # 官方 Context Engine 接入说明
-│   └── weknora/                      # 历史 v0.3 WeKnora 图谱 Overlay
-├── compatibility/
-│   └── upstreams-v0.5.json
-├── scripts/
-│   ├── check-v0.5-upstreams.sh
-│   └── verify-v0.5.sh
-├── configs/
-│   └── openclaw-v0.5.example.json
-└── docs/
-    └── V0.5_INTEGRATION.md
+integrations/openclaw/
+├─ knowledge-plugin/
+│  ├─ browser/          # 只调 Gateway Contract
+│  ├─ lib/principal.js  # OpenClaw profile -> Knowledge Principal
+│  └─ lib/weknora-client.js
+└─ openviking-plugin/
+   ├─ browser/
+   ├─ lib/principal.js  # OpenClaw profile/session owner -> OV Principal
+   ├─ lib/client.js
+   └─ lib/memory-runtime.js
+
+internal/
+├─ ontology/
+├─ graphview/
+├─ access/
+├─ httpapi/
+├─ retrieval/
+└─ ...
 ```
 
-## 快速验证
+## Memory Runtime
 
-```bash
-make verify
-```
+v0.6 不再建议在多用户 LeeClaw 中配置 OpenViking 官方插件的静态 `userId/accountId`。`leeclaw-openviking` 使用 OpenClaw 官方 hooks + Session Runtime：
 
-包含：
+- `before_prompt_build`：按 session creator profile 召回 Memory；
+- `agent_end`：按同一 profile 捕获最新 turn；
+- `before_reset`：提交 pending session；
+- OpenClaw 原 Context/Compaction 不被替换。
 
-- `go test ./...`
-- `go vet ./...`
-- 三个 Go 二进制构建
-- 新增 JavaScript 语法检查
-- WeKnora Adapter mock contract test
-- OpenViking Adapter mock contract test
-- 浏览器层禁止直连上游 API 检查
+## Knowledge 安全边界
 
-如已准备三套上游源码，再执行：
-
-```bash
-./scripts/check-v0.5-upstreams.sh \
-  /path/to/openclaw \
-  /path/to/weknora \
-  /path/to/openviking
-```
-
-## 派生 OpenClaw 构建树
-
-```bash
-./integrations/openclaw/apply-integration.sh \
-  /path/to/clean-openclaw \
-  /path/to/build/openclaw-v0.5
-```
-
-脚本只复制干净 OpenClaw 到派生目录，并新增：
+WeKnora Adapter 只发送：
 
 ```text
-extensions/leeclaw-knowledge
-extensions/leeclaw-openviking
+X-API-Key
+X-Tenant-ID
+X-External-User-ID=<OpenClaw profileId>
 ```
 
-**不会回写 OpenClaw upstream。** OpenClaw 当前 `pnpm-workspace.yaml` 已包含 `extensions/*`，因此不需要修改 Workspace 配置。
+用户 Bearer 和客户端声明的 external user 已从 v0.6 路径移除。WeKnora service API key 仍应按 capability / `knowledge_base_ids` 最小授权，并启用 API Principal `direct_header + require_direct_header`。
 
-OpenViking 的官方 context-engine 插件继续按其官方安装/升级流程管理，不 vendoring 到本项目。
+## 本体
 
-## 身份与隔离
+v0.4 起的 Ontology Registry 继续保留：immutable version、publish、active/pinned、rollback、audit、KB binding。OpenClaw Knowledge 图谱页统一查看 Entity Graph / Ontology Graph，底层仍不混库。
 
-Knowledge Adapter 支持：
+## 验证
 
-- `Authorization: Bearer ...`
-- `X-API-Key`
-- `X-Tenant-ID`
-- `X-External-User-ID`
-
-现有 Graph API 的 WeKnora 权限委托也同步支持：
-
-- `Authorization`
-- `X-API-Key`
-- `X-Tenant-ID`
-- `X-External-User-ID`
-- `X-External-User-Token`
-
-生产环境若需要真正的终端用户级权限映射，优先采用 WeKnora 的 JWT 或 `signed_token` API Principal。`direct_header` 只适合可信服务端链路，不应暴露给不可信浏览器。
-
-OpenViking UI Adapter 支持：
-
-- `X-OpenViking-Account`
-- `X-OpenViking-User`
-
-长期目标是将当前企业 Workspace 稳定映射为 OpenViking Account，而不是让三个系统直接共享数据库 ID。
-
-## 配置示例
-
-参考：
-
-```text
-configs/openclaw-v0.5.example.json
+```bash
+./scripts/verify-v0.6.sh
 ```
 
-其中 OpenViking 官方插件占用：
+上游契约：
 
-```text
-plugins.slots.contextEngine = openviking
+```bash
+./scripts/check-v0.6-upstreams.sh <openclaw> <weknora> <openviking>
 ```
-
-## 当前边界
-
-v0.5 的重点是建立**正确的组合骨架和升级边界**。Knowledge 页面已经覆盖核心读取、创建、图谱、成员/分享/审计管理视图，但还没有把 WeKnora 所有高级写操作全部重做一遍。
-
-后续文件上传、Chunk 编辑、FAQ、Datasource、邀请、成员角色写入、分享写操作等，都应该继续沿现有 `Knowledge UI -> Gateway Contract -> WeKnora Adapter` 路径扩展；不需要修改 OpenClaw Runtime，也不应该复制 WeKnora 后端规则。
-
-完整设计见 `ARCHITECTURE.md` 与 `docs/V0.5_INTEGRATION.md`。

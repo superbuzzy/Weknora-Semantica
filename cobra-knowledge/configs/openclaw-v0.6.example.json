@@ -1,0 +1,29 @@
+{
+  "plugins": {
+    "entries": {
+      "leeclaw-knowledge": {
+        "enabled": true,
+        "config": {
+          "weknoraBaseUrl": "http://weknora:8080",
+          "weknoraApiKey": "${WEKNORA_API_KEY}",
+          "weknoraTenantId": "${WEKNORA_TENANT_ID}",
+          "workspaceId": "${LEECLAW_WORKSPACE_ID}",
+          "graphApiBaseUrl": "http://leeclaw-graph-api:8090"
+        }
+      },
+      "leeclaw-openviking": {
+        "enabled": true,
+        "config": {
+          "baseUrl": "http://openviking:1933",
+          "apiKey": "${OPENVIKING_ROOT_API_KEY}",
+          "workspaceId": "${LEECLAW_WORKSPACE_ID}",
+          "memoryRuntimeEnabled": true,
+          "memoryRecallLimit": 8,
+          "memoryMaxRecallChars": 12000,
+          "commitPendingTokens": 1200,
+          "commitKeepRecentCount": 6
+        }
+      }
+    }
+  }
+}

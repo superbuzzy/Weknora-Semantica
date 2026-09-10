@@ -7,23 +7,27 @@ import (
 	"testing"
 )
 
-func TestWeKnoraAccessCheckerForwardsIdentityHeaders(t *testing.T) {
+func TestWeKnoraAccessCheckerForwardsOnlyServicePrincipalHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/knowledge-bases/kb-1" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 		expected := map[string]string{
-			"Authorization":         "Bearer token",
-			"X-API-Key":             "wk-api-key",
-			"X-Tenant-ID":           "42",
-			"X-External-User-ID":    "user-123",
-			"X-External-User-Token": "external-token",
-			"Accept-Language":       "zh-CN",
+			"X-API-Key":          "wk-api-key",
+			"X-Tenant-ID":        "42",
+			"X-External-User-ID": "profile-123",
+			"Accept-Language":    "zh-CN",
 		}
 		for name, want := range expected {
 			if got := r.Header.Get(name); got != want {
 				t.Fatalf("%s header = %q, want %q", name, got, want)
 			}
+		}
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Fatalf("Authorization must not be forwarded, got %q", got)
+		}
+		if got := r.Header.Get("X-External-User-Token"); got != "" {
+			t.Fatalf("X-External-User-Token must not be forwarded, got %q", got)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -31,11 +35,11 @@ func TestWeKnoraAccessCheckerForwardsIdentityHeaders(t *testing.T) {
 
 	checker := NewWeKnoraAccessChecker(server.URL)
 	headers := http.Header{}
-	headers.Set("Authorization", "Bearer token")
+	headers.Set("Authorization", "Bearer obsolete-user-token")
 	headers.Set("X-API-Key", "wk-api-key")
 	headers.Set("X-Tenant-ID", "42")
-	headers.Set("X-External-User-ID", "user-123")
-	headers.Set("X-External-User-Token", "external-token")
+	headers.Set("X-External-User-ID", "profile-123")
+	headers.Set("X-External-User-Token", "obsolete-external-token")
 	headers.Set("Accept-Language", "zh-CN")
 	if err := checker.CheckKnowledgeBaseAccess(context.Background(), "kb-1", headers); err != nil {
 		t.Fatal(err)

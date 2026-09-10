@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.6.0
+
+- OpenClaw `authenticatedUserProfile.profileId` 成为 LeeClaw 唯一人类用户 ID。
+- Knowledge / Memory / Skill Gateway Method 强制 durable profile access，并在插件内再次 fail-closed 校验。
+- 删除 Knowledge Plugin 的 WeKnora 用户 Bearer、静态 external user、浏览器 tenant/user 覆盖。
+- 删除 OpenViking Plugin 的静态 account/user 和浏览器覆盖。
+- WeKnora Adapter 统一使用服务 API Key + 服务端 Tenant + `X-External-User-ID=<profileId>`。
+- Graph API 授权委托不再转发用户 `Authorization` / `X-External-User-Token`。
+- 新增 identity-aware OpenViking Memory hooks：按 OpenClaw Session `createdActor(source=profile)` 动态召回、捕获和 commit。
+- 多用户部署不再使用静态用户 OpenViking context-engine 配置；OpenClaw 自己的 Context/Compaction 保持不变。
+- 新增 `upstreams-v0.6.json`、`check-v0.6-upstreams.sh`、`verify-v0.6.sh` 以及 legacy identity 门禁。
+- 三套 upstream submodule 保持不修改。
+
 ## v0.5.0
 
 - 新增 OpenClaw 原生 `leeclaw-knowledge` Control UI Plugin，通过 Gateway Contract + WeKnora Adapter 提供知识库管理体验，不 iframe WeKnora 页面。

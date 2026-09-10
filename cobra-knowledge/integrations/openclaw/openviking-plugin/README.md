@@ -1,11 +1,27 @@
-# LeeClaw OpenViking UI Plugin
+# leeclaw-openviking v0.6
 
-在 OpenClaw Control UI 中提供原生 `Memory` 与 `Skills` 页面。它只调用 OpenViking HTTP API，不修改 OpenViking Web Studio 或 Memory Engine。
+OpenClaw 原生 Memory / Skills Plugin。OpenViking 是 Memory、Session、Experience、Skill 的 Source of Truth。
 
-运行时长期记忆仍使用 OpenViking 官方 `@openviking/openclaw-plugin` context-engine 插件；本插件只负责管理/查看 UI，因此不会复制 `assemble / afterTurn / compact` 生命周期。
+## Identity
 
-Skill 的 Source of Truth 为 OpenViking：
+管理面唯一用户：`authenticatedUserProfile.profileId`。
 
-- 用户 Skill：`viking://user/{user_id}/skills`
-- 共享 Skill：`viking://agent/skills`
-- Agent 可通过官方 OpenViking 插件的 `ov_search / ov_read / ov_multi_read` 按需发现和读取 Skill。
+```text
+X-OpenViking-Account = workspaceId
+X-OpenViking-User    = profileId
+```
+
+旧的静态 `accountId/userId/forwardAuthenticatedUser` 配置已删除。
+
+## Identity-aware Memory Runtime
+
+多用户 LeeClaw 不使用 OpenViking 官方插件静态 user/account 的 context-engine 配置。v0.6 用 OpenClaw 官方 hooks 与 Session Runtime：
+
+- `before_prompt_build` -> 按 session creator profile 召回 Memory；
+- `agent_end` -> 写入最新 user/assistant turn；
+- `before_reset` -> commit pending memory；
+- session owner 只能来自 `createdActor(type=human, source=profile)`。
+
+无法解析 durable profile 时，不查询、不写入 Memory，避免跨用户污染；Agent 本身继续运行。
+
+OpenClaw 自己的 context/compaction 机制保持不变。

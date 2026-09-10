@@ -123,7 +123,7 @@ func (s *Server) handle(ctx context.Context, req request) response {
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 	switch req.Method {
 	case "initialize":
-		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.5.0"}}
+		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.6.0"}}
 	case "notifications/initialized":
 		resp.Result = map[string]interface{}{}
 	case "tools/list":
@@ -202,9 +202,9 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		return ontsvc.CompileWeKnora(p.Ontology), nil
 	case "knowledge.arbitrate":
 		var p struct {
-			Assertions []model.Assertion               `json:"assertions"`
+			Assertions []model.Assertion              `json:"assertions"`
 			Policy     retrievalsvc.ArbitrationPolicy `json:"policy"`
-			At         *time.Time                      `json:"at,omitempty"`
+			At         *time.Time                     `json:"at,omitempty"`
 		}
 		if err := json.Unmarshal(args, &p); err != nil {
 			return nil, err

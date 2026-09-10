@@ -1,9 +1,9 @@
 {
   "name": "openclaw-plugin-leeclaw-openviking",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
-  "description": "Native OpenClaw Memory and Skills pages backed by OpenViking.",
+  "description": "OpenClaw-native Memory/Skills backed by OpenViking with durable-profile identity and identity-aware memory hooks.",
   "scripts": {
     "build": "openclaw plugins build",
     "validate": "openclaw plugins validate --json",

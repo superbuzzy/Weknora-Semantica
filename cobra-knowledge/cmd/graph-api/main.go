@@ -64,7 +64,7 @@ func main() {
 		WriteTimeout:      20 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("CobraKnowledge API v0.5 listening on %s; registry=%s", *listen, *registryRoot)
+	log.Printf("CobraKnowledge API v0.6 listening on %s; registry=%s", *listen, *registryRoot)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}

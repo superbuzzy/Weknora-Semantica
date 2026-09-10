@@ -223,9 +223,8 @@ function createKnowledgePage(host) {
           sharesCard.append(sharesBody);
           access.append(membersCard, sharesCard);
           content.replaceChildren(access);
-          const tenantId = selectedKb.tenant_id;
           const [members, shares] = await Promise.all([
-            tenantId ? call("leeclaw.knowledge.members", { tenantId }) : Promise.resolve({ items: [] }),
+            call("leeclaw.knowledge.members", {}),
             call("leeclaw.knowledge.shares", { kbId: selectedKb.id }),
           ]);
           renderRows(membersBody, members?.items ?? []);
