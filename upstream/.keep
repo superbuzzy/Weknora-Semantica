@@ -1,0 +1,1 @@
+upstream sources are managed as git submodules; see ../.gitmodules
