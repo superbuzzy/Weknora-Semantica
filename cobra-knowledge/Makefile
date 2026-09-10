@@ -1,10 +1,17 @@
-.PHONY: test vet build demo clean
+.PHONY: test vet build plugin-test verify demo clean
 
 test:
 	go test ./...
 
 vet:
 	go vet ./...
+
+plugin-test:
+	node --test integrations/openclaw/knowledge-plugin/test/*.test.js
+	node --test integrations/openclaw/openviking-plugin/test/*.test.js
+
+verify:
+	./scripts/verify-v0.5.sh
 
 build:
 	mkdir -p bin

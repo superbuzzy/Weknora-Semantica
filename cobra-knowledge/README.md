@@ -1,205 +1,232 @@
-# CobraKnowledge v0.4
+# LeeClaw Knowledge Core v0.5
 
-> 面向企业 Agent 的检索、本体、知识图谱与上下文治理内核
+> OpenClaw 为 Agent 主干，WeKnora 为企业知识引擎，OpenViking 为 Memory + Skill 引擎；本目录保留历史 `cobra-knowledge` 工程名，以避免 v0.5 为改名引入无关风险。
 
-CobraKnowledge 的核心目标，是让 Agent 在企业场景中能够准确理解业务语义、选择正确的数据和知识来源、处理时效与冲突，并把可追溯的 Context Pack 交给模型推理。
+v0.5 的目标不是把三套上游揉成一个 Fork，而是把它们通过 **OpenClaw Plugin + Adapter Contract + 独立知识治理内核** 组装成一个可持续升级的产品骨架。
 
-v0.4 的重点是 **Ontology Registry**：本体不再通过“KB -> JSON 文件路径”使用，而成为具备版本、发布、绑定、回滚和审计能力的一等资产。
+## v0.5 总体结构
 
-## 核心架构
+```mermaid
+flowchart TB
+    UI[OpenClaw Control UI\n统一产品主界面]
+    AR[OpenClaw Agent Runtime]
+
+    UI --> CHAT[对话]
+    UI --> KP[Knowledge Plugin\n原生 OpenClaw 页面]
+    UI --> MP[Memory Plugin\n原生 OpenClaw 页面]
+    UI --> SP[Skills Plugin\n原生 OpenClaw 页面]
+    CHAT --> AR
+
+    KP --> KAD[WeKnora Adapter / BFF]
+    KAD --> WK[WeKnora\nKB / Document / Wiki / Sharing / RBAC]
+
+    MP --> OAD[OpenViking Adapter]
+    SP --> OAD
+    OAD --> OV[OpenViking\nMemory / Session / Experience / Skill]
+
+    AR --> OVP[OpenViking 官方 Context Engine Plugin]
+    OVP --> OV
+
+    AR --> MCP[Context MCP]
+    MCP --> CORE[Knowledge Core\nOntology / Planner / Arbiter / Context]
+    CORE --> WK
+    CORE --> ONT[Ontology Registry]
+    CORE --> DATA[Business API / MCP]
+```
+
+## v0.5 已实现
+
+### OpenClaw 原生 Knowledge 页面
+
+`integrations/openclaw/knowledge-plugin` 是正式 OpenClaw Control UI Plugin，不使用 iframe，不复制 WeKnora Vue 页面。
+
+当前提供：
+
+- 知识库列表与创建；
+- 文档列表与解析状态查看；
+- Wiki 页面列表；
+- 实体图 / 本体图统一查看；
+- Workspace 成员查看；
+- Knowledge Base 分享关系查看；
+- Knowledge Base 审计活动查看。
+
+浏览器代码只调用 `leeclaw.knowledge.*` Gateway 方法，不包含 WeKnora `/api/v1/...` 路径。WeKnora API 变化由插件 runtime 的 Adapter 层吸收。
+
+### OpenClaw 原生 Memory / Skills 页面
+
+`integrations/openclaw/openviking-plugin` 提供两个原生 Control UI Tab：
+
+- `Memory`：最近 Session 与长期记忆检索；
+- `Skills`：Skill 列表、语义查找与 `SKILL.md` 查看。
+
+Skill 的唯一权威源仍为 OpenViking：
 
 ```text
-Agent Runtime
-     │
-   Skill                     业务方法、证据门槛、检索原则
-     │
-Context MCP
-     │
-Retrieval Control Plane
- Resolver -> Planner -> Retrievers -> Arbiter -> Assembler
-                    │
-        ┌───────────┼────────────┐
-        ▼           ▼            ▼
-      Wiki图       实体图        本体图          Business Data
-     WeKnora      Neo4j        Registry             MCP/API
+viking://user/{user_id}/skills   个人 Skill
+viking://agent/skills            Account/Agent 共享 Skill
 ```
 
-## v0.4 本体生命周期
+### OpenViking 仍负责真正的 Memory Runtime
+
+v0.5 **不重新实现** OpenViking 的记忆生命周期。Agent Runtime 使用 OpenViking 官方 `@openviking/openclaw-plugin`：
 
 ```text
-候选本体
-   │ register
-   ▼
-Immutable Version
-   │ publish
-   ▼
-Published Version ────────┐
-   │                      │
-   ▼                      │
-active_version            │
-   │                      │
-   ├──── active binding ──┤→ WeKnora KB
-   │                      │
-历史 published version ───┘ pinned binding / rollback
+assemble   -> 回复前召回 Memory
+
+afterTurn -> 每轮对话写 Session
+
+compact    -> Commit / 精炼长期 Memory
 ```
 
-### 关键原则
+建议仅召回 `user + agent`，保持 `enableAddResourceTool=false`，避免把企业知识同时维护到 OpenViking Resources 与 WeKnora 两处。
 
-- 本体内容版本注册后不可覆盖；
-- 发布状态和本体 payload 分离；
-- 回滚只移动 `active_version`；
-- KB 可跟随 active，也可 pinned 固定版本；
-- GraphView/Planner/MCP 只依赖 Registry 接口，不依赖本体文件路径；
-- WeKnora 图谱页面接口不变，v0.4 不新增 WeKnora 上游改动。
+### 本体图继续属于 Knowledge
 
-## 三张图
+现有 Ontology Registry、版本发布、KB Binding、回滚以及 `Ontology -> GraphView` 全部保留。
 
-- **Wiki 图**：知识页面、主题和引用关系，负责解释与证据导航；
-- **实体图**：具体实体、属性、状态与业务关系，负责事实与关系检索；
-- **本体图**：Class、Property、Relation、Hierarchy、Domain/Range、SourceBinding、RetrievalPolicy，负责业务语义和检索控制。
-
-## WeKnora 页面
-
-v0.3 已增加统一 `GraphExplorer`：
+OpenClaw Knowledge 页面中的图谱结构为：
 
 ```text
-图谱区域
-┌────────────┬────────────┐
-│   实体图    │   本体图    │
-└────────────┴────────────┘
+Knowledge
+└── 图谱
+    ├── 实体图 -> WeKnora Neo4j / GraphRAG
+    └── 本体图 -> Ontology Registry
 ```
 
-v0.4 **不修改这个前端组件**。请求仍然是：
+两种图继续使用稳定 `GraphView` 契约，UI 不知道底层 Neo4j 或本体存储格式。
 
-```text
-GET /api/v1/knowledge-bases/{kb_id}/graph?view=entity
-GET /api/v1/knowledge-bases/{kb_id}/graph?view=ontology
-```
+## 低耦合边界
 
-本体图的数据解析由 CobraKnowledge 内部从文件绑定切换到 Registry。
+| 资产/能力 | Source of Truth | v0.5 接入方式 |
+|---|---|---|
+| Agent Runtime | OpenClaw | 原生，不改运行主干 |
+| 企业知识库/文档/Wiki | WeKnora | Knowledge Adapter |
+| Knowledge 用户/成员/共享/隔离 | WeKnora | 权限头 + API，后端最终裁决 |
+| Entity Graph | WeKnora | Graph Adapter，只读 |
+| Ontology | 自研 Ontology Registry | GraphView / Semantic Catalog |
+| Memory/Session/Experience | OpenViking | 官方 Context Engine + Adapter |
+| Skill | OpenViking | `/api/v1/skills` + 官方 `ov_*` 工具 |
+| 实时业务数据 | Business API/MCP | Retrieval Planner 按需调用 |
 
-## 快速开始
+四条工程规则：
 
-```bash
-make test
-make vet
-make build
-```
+1. 上游已有 Plugin/API 的能力，不修改上游内核；
+2. OpenClaw 浏览器页面不直接调用 WeKnora/OpenViking API；
+3. 每类资产只有一个 Source of Truth；
+4. 上游升级由 Contract Test / Compatibility Gate 先验证，差异优先收敛在 Adapter。
 
-生成候选本体：
-
-```bash
-bin/cobra-knowledge bootstrap \
-  -in examples/weknora-graph.json \
-  -domain distribution_network \
-  -out out/bootstrap
-```
-
-注册：
-
-```bash
-bin/cobra-knowledge registry-register \
-  -root var/ontology-registry \
-  -ontology out/bootstrap/candidate-ontology.json \
-  -actor operator
-```
-
-审核完成后先生成新的 approved 快照，再注册、发布：
-
-```bash
-bin/cobra-knowledge approve-ontology \
-  -ontology out/bootstrap/candidate-ontology.json \
-  -version 1.0.0 \
-  -reviewer reviewer \
-  -out out/approved-ontology.json
-
-bin/cobra-knowledge registry-register \
-  -root var/ontology-registry \
-  -ontology out/approved-ontology.json \
-  -actor reviewer
-
-bin/cobra-knowledge registry-publish \
-  -root var/ontology-registry \
-  -ontology-id <ontology_id> \
-  -version 1.0.0 \
-  -actor reviewer
-```
-
-绑定知识库：
-
-```bash
-bin/cobra-knowledge registry-bind \
-  -root var/ontology-registry \
-  -kb <weknora_kb_id> \
-  -ontology-id <ontology_id> \
-  -mode active
-```
-
-## API 启动
-
-```bash
-export COBRA_ONTOLOGY_REGISTRY_ROOT=/app/data/ontology-registry
-export COBRA_REGISTRY_ADMIN_TOKEN='replace-with-random-token'
-export COBRA_NEO4J_URL=http://neo4j:7474
-export COBRA_NEO4J_USER=neo4j
-export COBRA_NEO4J_PASSWORD='***'
-export COBRA_WEKNORA_BASE_URL=http://weknora:8080
-export COBRA_GRAPH_AUTH_MODE=weknora
-
-bin/cobra-graph-api -listen :8090
-```
-
-Graph UI 的读权限继续委托 WeKnora RBAC；Registry 治理 API 使用独立管理员 Token。
-
-## MCP
-
-生产推荐从 Registry 解析正式本体：
-
-```bash
-export COBRA_ONTOLOGY_REGISTRY_ROOT=/app/data/ontology-registry
-export COBRA_ONTOLOGY_KB_ID=<weknora_kb_id>
-export WEKNORA_BASE_URL=http://weknora:8080
-export WEKNORA_API_KEY=sk-xxxxx
-
-go run ./cmd/context-mcp
-```
-
-`COBRA_ONTOLOGY_FILE` 仍可用于本地开发，但不再是生产推荐方式。
-
-## 工程目录
+## 目录
 
 ```text
 cobra-knowledge/
-├── cmd/
-│   ├── cobra/                 CLI / bootstrap / registry 管理
-│   ├── context-mcp/           Agent MCP
-│   └── graph-api/             Graph + Registry API
-├── internal/
-│   ├── ontology/              discovery / validator / compiler / registry
-│   ├── graph/                 entity resolution / assertion
-│   ├── graphview/             entity / ontology -> GraphView
-│   ├── retrieval/             semantic catalog / planner / arbiter
-│   ├── context/               retriever orchestration / Context Pack
-│   ├── httpapi/               Graph API + Registry API
-│   └── access/                WeKnora RBAC delegation
-├── integrations/weknora/      非侵入 Overlay
-├── prompts/
-├── skills/
+├── internal/                         # 既有 Knowledge Core
+├── cmd/                              # CLI / Context MCP / Graph API
+├── integrations/
+│   ├── openclaw/
+│   │   ├── knowledge-plugin/         # OpenClaw 原生 Knowledge UI + WeKnora BFF
+│   │   ├── openviking-plugin/        # OpenClaw 原生 Memory / Skills UI
+│   │   └── apply-integration.sh      # 从干净 OpenClaw 生成派生构建树
+│   ├── openviking/                   # 官方 Context Engine 接入说明
+│   └── weknora/                      # 历史 v0.3 WeKnora 图谱 Overlay
+├── compatibility/
+│   └── upstreams-v0.5.json
+├── scripts/
+│   ├── check-v0.5-upstreams.sh
+│   └── verify-v0.5.sh
+├── configs/
+│   └── openclaw-v0.5.example.json
 └── docs/
+    └── V0.5_INTEGRATION.md
 ```
 
-## 上游隔离
+## 快速验证
 
-WeKnora 与 Semantica 都不是 CobraKnowledge 内核源码的一部分：
+```bash
+make verify
+```
 
-- WeKnora：知识/RAG/实体图底座之一，通过 API、Neo4j 只读适配器和派生 Overlay 集成；
-- Semantica：本体构建、Provenance、Conflict、Validation 等方法参考，无运行时依赖；
-- CobraKnowledge：独立维护本体、检索策略、冲突裁决和 Context 能力。
+包含：
 
-详见：
+- `go test ./...`
+- `go vet ./...`
+- 三个 Go 二进制构建
+- 新增 JavaScript 语法检查
+- WeKnora Adapter mock contract test
+- OpenViking Adapter mock contract test
+- 浏览器层禁止直连上游 API 检查
 
-- `ARCHITECTURE.md`
-- `docs/ONTOLOGY_REGISTRY.md`
-- `docs/GRAPH_VISUALIZATION.md`
-- `docs/MODULES.md`
-- `RELEASE-v0.4.md`
+如已准备三套上游源码，再执行：
+
+```bash
+./scripts/check-v0.5-upstreams.sh \
+  /path/to/openclaw \
+  /path/to/weknora \
+  /path/to/openviking
+```
+
+## 派生 OpenClaw 构建树
+
+```bash
+./integrations/openclaw/apply-integration.sh \
+  /path/to/clean-openclaw \
+  /path/to/build/openclaw-v0.5
+```
+
+脚本只复制干净 OpenClaw 到派生目录，并新增：
+
+```text
+extensions/leeclaw-knowledge
+extensions/leeclaw-openviking
+```
+
+**不会回写 OpenClaw upstream。** OpenClaw 当前 `pnpm-workspace.yaml` 已包含 `extensions/*`，因此不需要修改 Workspace 配置。
+
+OpenViking 的官方 context-engine 插件继续按其官方安装/升级流程管理，不 vendoring 到本项目。
+
+## 身份与隔离
+
+Knowledge Adapter 支持：
+
+- `Authorization: Bearer ...`
+- `X-API-Key`
+- `X-Tenant-ID`
+- `X-External-User-ID`
+
+现有 Graph API 的 WeKnora 权限委托也同步支持：
+
+- `Authorization`
+- `X-API-Key`
+- `X-Tenant-ID`
+- `X-External-User-ID`
+- `X-External-User-Token`
+
+生产环境若需要真正的终端用户级权限映射，优先采用 WeKnora 的 JWT 或 `signed_token` API Principal。`direct_header` 只适合可信服务端链路，不应暴露给不可信浏览器。
+
+OpenViking UI Adapter 支持：
+
+- `X-OpenViking-Account`
+- `X-OpenViking-User`
+
+长期目标是将当前企业 Workspace 稳定映射为 OpenViking Account，而不是让三个系统直接共享数据库 ID。
+
+## 配置示例
+
+参考：
+
+```text
+configs/openclaw-v0.5.example.json
+```
+
+其中 OpenViking 官方插件占用：
+
+```text
+plugins.slots.contextEngine = openviking
+```
+
+## 当前边界
+
+v0.5 的重点是建立**正确的组合骨架和升级边界**。Knowledge 页面已经覆盖核心读取、创建、图谱、成员/分享/审计管理视图，但还没有把 WeKnora 所有高级写操作全部重做一遍。
+
+后续文件上传、Chunk 编辑、FAQ、Datasource、邀请、成员角色写入、分享写操作等，都应该继续沿现有 `Knowledge UI -> Gateway Contract -> WeKnora Adapter` 路径扩展；不需要修改 OpenClaw Runtime，也不应该复制 WeKnora 后端规则。
+
+完整设计见 `ARCHITECTURE.md` 与 `docs/V0.5_INTEGRATION.md`。

@@ -1,82 +1,74 @@
-# v0.4 模块与代码职责
+# v0.5 模块与代码职责
 
-## `internal/model`
+## Knowledge Core
 
-核心数据契约：
+### `internal/ontology`
 
-- `GraphSnapshot / Entity / Relation / EvidenceRef`
-- `Ontology / OntologyClass / DataProperty / ObjectRelation / Constraint / ReviewItem`
-- `Assertion / RetrievalPlan / ContextPack`
-- `GraphView / GraphViewNode / GraphViewEdge / GraphViewMeta`
-- v0.4 新增 `OntologyManifest / OntologyVersionMeta / OntologyBinding / OntologyResolution / RegistryAuditEvent`
+本体发现、审核、发布、Registry、active/pinned KB Binding 与不可变版本。继续作为本体 Source of Truth。
 
-`GraphView` 仍是 WeKnora Overlay 唯一依赖的显示契约。Registry 的存储结构不会泄漏到前端。
+### `internal/graphview`
 
-## `internal/ontology`
+- WeKnora Neo4j Entity Graph 只读 Adapter；
+- Ontology -> GraphView；
+- RegistryOntologySource。
 
-- `discovery.go`：实体图模式统计与候选本体发现；
-- `validator.go`：确定性本体和实体图校验；
-- `compiler.go`：Ontology -> WeKnora ExtractConfig；
-- `release.go`：候选本体审核完成后生成新的 approved 快照，不原地修改候选版本；
-- `registry.go`：v0.4 正式 Registry。版本不可变、发布、active 指针、KB binding、rollback、checksum、audit。
+### `internal/retrieval`
 
-Registry 对外只暴露逻辑 ID 和版本，不暴露 ontology 文件路径。默认 `FSRegistry` 可以后续替换 PostgreSQL Registry。
+Semantic Catalog、Planner、Arbiter。负责 Agent 查询策略与可信裁决，不负责 Knowledge 管理页面。
 
-## `internal/graphview`
+### `internal/context`
 
-- `neo4j_http.go`：只读 WeKnora GraphRAG Neo4j 实体图；
-- `ontology.go`：Ontology -> GraphView；
-- `source.go`：`RegistryOntologySource`，通过 Registry 解析当前 KB 的 active/pinned published ontology。
+并发 Retriever 与 Context Pack 装配。
 
-v0.3 的 `FileOntologyBindings` 已退出运行链路。
+### `internal/access`
 
-## `internal/httpapi`
+Graph API 访问检查委托 WeKnora。v0.5 增加 API Key 与外部用户身份头透传，保持授权规则由 WeKnora 决定。
 
-两类接口共享进程但权限边界分离：
+## OpenClaw Integration
 
-### WeKnora-facing Graph API
+### `integrations/openclaw/knowledge-plugin`
 
-```text
-GET /api/v1/knowledge-bases/{kb_id}/graph?view=entity|ontology
-```
+OpenClaw 原生 Knowledge Control UI + plugin runtime BFF。
 
-沿用 WeKnora RBAC，不改变 v0.3 前端调用契约。
+浏览器：
 
-### Ontology Registry Governance API
+- KB list/create；
+- Documents；
+- Wiki；
+- Entity/Ontology Graph；
+- Members/Shares；
+- Activity。
 
-```text
-GET/POST/PUT /api/v1/registry/...
-```
+Runtime Adapter：`lib/weknora-client.js`，集中保存 WeKnora REST 路径、身份头和返回值归一逻辑。
 
-使用独立 `X-Cobra-Admin-Token`。普通 WeKnora Token 不能发布或回滚本体。
+### `integrations/openclaw/openviking-plugin`
 
-## `internal/mcp`
+OpenClaw 原生 Memory/Skills Control UI。
 
-Agent 生产入口仍保持少量稳定工具：
+Runtime Adapter：`lib/client.js`，调用 OpenViking Session/Search/Skills API。
 
-- `context.retrieve`
-- `context.get_evidence`
+它不承担 OpenViking context-engine；真正 Memory Runtime 使用官方插件。
 
-v0.4 支持通过 `COBRA_ONTOLOGY_REGISTRY_ROOT + COBRA_ONTOLOGY_KB_ID` 加载 Registry 当前正式本体。`COBRA_ONTOLOGY_FILE` 仅作为本地开发兼容方式。
+### `integrations/openclaw/apply-integration.sh`
 
-## `internal/retrieval`
+从干净 OpenClaw 生成派生构建树，并将两个自研插件加入 `extensions/*`。不修改上游源目录。
 
-- `catalog.go`：Ontology -> Semantic Catalog；
-- `planner.go`：最小充分 Retrieval Plan；
-- `arbiter.go`：时效、来源、范围、版本和冲突裁决。
+## OpenViking Integration
 
-## `internal/graph`
+### `integrations/openviking/README.md`
 
-- `resolver.go`：保守式实体归一；
-- `assertion.go`：事实主张和 Evidence 构建。
+规定官方 context-engine 的使用方式与 Memory/Skill 边界。
 
-## `integrations/weknora`
+## Compatibility
 
-v0.4 **没有新增 WeKnora Overlay 改动**。仍使用 v0.3 的：
+### `compatibility/upstreams-v0.5.json`
 
-- `cobra-knowledge.ts`
-- `GraphExplorer.vue`
-- `0001-add-ontology-graph-switcher.patch`
-- `apply-overlay.sh`
+记录当前已验证上游源码版本及依赖契约。
 
-因此 WeKnora 上游冲突面没有随 v0.4 扩大。
+### `scripts/check-v0.5-upstreams.sh`
+
+源码级 Compatibility Gate。
+
+### `scripts/verify-v0.5.sh`
+
+Go + JS + Browser isolation 的本地发布门禁。
