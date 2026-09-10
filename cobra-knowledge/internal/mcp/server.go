@@ -43,11 +43,23 @@ type rpcError struct {
 
 func NewFromEnv() (*Server, error) {
 	var onto model.Ontology
-	ontoPath := os.Getenv("COBRA_ONTOLOGY_FILE")
-	if ontoPath != "" {
+	ontologyLoaded := false
+	registryRoot := strings.TrimSpace(os.Getenv("COBRA_ONTOLOGY_REGISTRY_ROOT"))
+	registryKBID := strings.TrimSpace(os.Getenv("COBRA_ONTOLOGY_KB_ID"))
+	if registryRoot != "" && registryKBID != "" {
+		resolution, err := ontsvc.NewFSRegistry(registryRoot).ResolveForKnowledgeBase(context.Background(), registryKBID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve ontology from registry for %s: %w", registryKBID, err)
+		}
+		onto = resolution.Ontology
+		ontologyLoaded = true
+	}
+	ontoPath := strings.TrimSpace(os.Getenv("COBRA_ONTOLOGY_FILE"))
+	if !ontologyLoaded && ontoPath != "" {
 		if err := store.ReadJSON(ontoPath, &onto); err != nil {
 			return nil, err
 		}
+		ontologyLoaded = true
 	}
 	overlay := retrievalsvc.CatalogOverlay{}
 	if overlayPath := os.Getenv("COBRA_CATALOG_OVERLAY_FILE"); overlayPath != "" {
@@ -64,7 +76,7 @@ func NewFromEnv() (*Server, error) {
 	}
 	arbiter := retrievalsvc.NewArbiter(arbiterPolicy)
 	service := ctxsvc.NewService(planner, arbiter, ctxsvc.NewAssembler())
-	if ontoPath != "" {
+	if ontologyLoaded {
 		service.Register(&ctxsvc.StaticOntologyRetriever{Ontology: onto})
 	}
 	graphPath := os.Getenv("COBRA_ENTITY_GRAPH_FILE")
@@ -111,7 +123,7 @@ func (s *Server) handle(ctx context.Context, req request) response {
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 	switch req.Method {
 	case "initialize":
-		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.3.0"}}
+		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.4.0"}}
 	case "notifications/initialized":
 		resp.Result = map[string]interface{}{}
 	case "tools/list":

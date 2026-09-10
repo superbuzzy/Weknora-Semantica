@@ -39,6 +39,18 @@ func main() {
 		err = arbitrateCmd(os.Args[2:])
 	case "bootstrap":
 		err = bootstrapCmd(os.Args[2:])
+	case "approve-ontology":
+		err = approveOntologyCmd(os.Args[2:])
+	case "registry-register":
+		err = registryRegisterCmd(os.Args[2:])
+	case "registry-publish":
+		err = registryPublishCmd(os.Args[2:])
+	case "registry-activate":
+		err = registryActivateCmd(os.Args[2:])
+	case "registry-bind":
+		err = registryBindCmd(os.Args[2:])
+	case "registry-resolve":
+		err = registryResolveCmd(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
@@ -224,11 +236,139 @@ func bootstrapCmd(args []string) error {
 			return err
 		}
 	}
-	summary := map[string]interface{}{"version": "0.3.0", "entities": len(g.Entities), "relations": len(g.Relations), "classes": len(o.Classes), "properties": len(o.Properties), "ontology_relations": len(o.Relations), "review_items": len(o.ReviewQueue)}
+	summary := map[string]interface{}{"version": "0.4.0", "entities": len(g.Entities), "relations": len(g.Relations), "classes": len(o.Classes), "properties": len(o.Properties), "ontology_relations": len(o.Relations), "review_items": len(o.ReviewQueue)}
 	b, _ := json.MarshalIndent(summary, "", "  ")
 	fmt.Println(string(b))
 	return nil
 }
+
+func approveOntologyCmd(args []string) error {
+	fs := flag.NewFlagSet("approve-ontology", flag.ContinueOnError)
+	in := fs.String("ontology", "", "reviewed candidate ontology json")
+	version := fs.String("version", "", "approved semantic version")
+	reviewer := fs.String("reviewer", "", "reviewer")
+	out := fs.String("out", "out/approved-ontology.json", "approved ontology output")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	var o model.Ontology
+	if err := store.ReadJSON(*in, &o); err != nil {
+		return err
+	}
+	approved, err := ontsvc.ApproveSnapshot(o, *version, *reviewer)
+	if err != nil {
+		return err
+	}
+	return store.WriteJSON(*out, approved)
+}
+
+func registryRegisterCmd(args []string) error {
+	fs := flag.NewFlagSet("registry-register", flag.ContinueOnError)
+	root := fs.String("root", "var/ontology-registry", "registry root")
+	in := fs.String("ontology", "", "ontology json")
+	actor := fs.String("actor", "cli", "actor")
+	notes := fs.String("notes", "", "release notes")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	var o model.Ontology
+	if err := store.ReadJSON(*in, &o); err != nil {
+		return err
+	}
+	meta, err := ontsvc.NewFSRegistry(*root).RegisterVersion(context.Background(), o, *actor, *notes)
+	if err != nil {
+		return err
+	}
+	return printJSON(meta)
+}
+
+func registryPublishCmd(args []string) error {
+	fs := flag.NewFlagSet("registry-publish", flag.ContinueOnError)
+	root := fs.String("root", "var/ontology-registry", "registry root")
+	ontologyID := fs.String("ontology-id", "", "ontology id")
+	version := fs.String("version", "", "version")
+	actor := fs.String("actor", "cli", "actor")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	meta, err := ontsvc.NewFSRegistry(*root).Publish(context.Background(), *ontologyID, *version, *actor)
+	if err != nil {
+		return err
+	}
+	return printJSON(meta)
+}
+
+func registryActivateCmd(args []string) error {
+	fs := flag.NewFlagSet("registry-activate", flag.ContinueOnError)
+	root := fs.String("root", "var/ontology-registry", "registry root")
+	ontologyID := fs.String("ontology-id", "", "ontology id")
+	version := fs.String("version", "", "published version to activate")
+	actor := fs.String("actor", "cli", "actor")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := ontsvc.NewFSRegistry(*root).Activate(context.Background(), *ontologyID, *version, *actor); err != nil {
+		return err
+	}
+	manifest, err := ontsvc.NewFSRegistry(*root).GetManifest(context.Background(), *ontologyID)
+	if err != nil {
+		return err
+	}
+	return printJSON(manifest)
+}
+
+func registryBindCmd(args []string) error {
+	fs := flag.NewFlagSet("registry-bind", flag.ContinueOnError)
+	root := fs.String("root", "var/ontology-registry", "registry root")
+	kbID := fs.String("kb", "", "WeKnora knowledge base id")
+	ontologyID := fs.String("ontology-id", "", "ontology id")
+	mode := fs.String("mode", "active", "binding mode: active or pinned")
+	version := fs.String("version", "", "required for pinned mode")
+	actor := fs.String("actor", "cli", "actor")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	r := ontsvc.NewFSRegistry(*root)
+	binding := model.OntologyBinding{KnowledgeBaseID: *kbID, OntologyID: *ontologyID, Mode: *mode, Version: *version, UpdatedBy: *actor}
+	if err := r.BindKnowledgeBase(context.Background(), binding); err != nil {
+		return err
+	}
+	binding, err := r.GetBinding(context.Background(), *kbID)
+	if err != nil {
+		return err
+	}
+	return printJSON(binding)
+}
+
+func registryResolveCmd(args []string) error {
+	fs := flag.NewFlagSet("registry-resolve", flag.ContinueOnError)
+	root := fs.String("root", "var/ontology-registry", "registry root")
+	kbID := fs.String("kb", "", "WeKnora knowledge base id")
+	out := fs.String("out", "", "optional ontology output file")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	resolution, err := ontsvc.NewFSRegistry(*root).ResolveForKnowledgeBase(context.Background(), *kbID)
+	if err != nil {
+		return err
+	}
+	if *out != "" {
+		if err := store.WriteJSON(*out, resolution.Ontology); err != nil {
+			return err
+		}
+	}
+	return printJSON(map[string]interface{}{"binding": resolution.Binding, "version": resolution.Version, "ontology": resolution.Ontology})
+}
+
+func printJSON(value interface{}) error {
+	b, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(b))
+	return nil
+}
+
 func usage() {
-	fmt.Fprintln(os.Stderr, "cobra-knowledge v0.3\ncommands: normalize-weknora | resolve-entities | discover-ontology | compile-weknora | build-assertions | plan | arbitrate | bootstrap")
+	fmt.Fprintln(os.Stderr, "cobra-knowledge v0.4\ncommands: normalize-weknora | resolve-entities | discover-ontology | compile-weknora | build-assertions | plan | arbitrate | bootstrap | approve-ontology | registry-register | registry-publish | registry-activate | registry-bind | registry-resolve")
 }

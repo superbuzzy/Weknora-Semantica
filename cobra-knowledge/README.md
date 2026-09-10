@@ -1,59 +1,84 @@
-# CobraKnowledge v0.3
+# CobraKnowledge v0.4
 
-CobraKnowledge is a Go-native enterprise Agent retrieval and context-governance core. WeKnora is a replaceable knowledge source, Semantica is a design reference only, and the CobraKnowledge runtime imports neither upstream project.
+> 面向企业 Agent 的检索、本体、知识图谱与上下文治理内核
 
-## Core architecture
+CobraKnowledge 的核心目标，是让 Agent 在企业场景中能够准确理解业务语义、选择正确的数据和知识来源、处理时效与冲突，并把可追溯的 Context Pack 交给模型推理。
+
+v0.4 的重点是 **Ontology Registry**：本体不再通过“KB -> JSON 文件路径”使用，而成为具备版本、发布、绑定、回滚和审计能力的一等资产。
+
+## 核心架构
 
 ```text
-                           Agent Runtime
-                                │
-                              Skill
-                                │
-                         Context MCP / API
-                                │
-                    Retrieval Control Plane
-                 Resolver -> Planner -> Retrievers
-                           -> Arbiter -> Assembler
-                                │
-                            Context Pack
-
-Knowledge assets:
-  Wiki Graph        Entity Graph        Ontology Graph        Business Data
-  WeKnora           WeKnora Neo4j       CobraKnowledge        MCP / API
+Agent Runtime
+     │
+   Skill                     业务方法、证据门槛、检索原则
+     │
+Context MCP
+     │
+Retrieval Control Plane
+ Resolver -> Planner -> Retrievers -> Arbiter -> Assembler
+                    │
+        ┌───────────┼────────────┐
+        ▼           ▼            ▼
+      Wiki图       实体图        本体图          Business Data
+     WeKnora      Neo4j        Registry             MCP/API
 ```
 
-The three graphs are knowledge assets. The core capability is the retrieval strategy: what to search, where to search, which evidence is trustworthy, how conflicts and freshness are handled, and when retrieval should stop.
+## v0.4 本体生命周期
 
-## v0.3: ontology graph visible in WeKnora
+```text
+候选本体
+   │ register
+   ▼
+Immutable Version
+   │ publish
+   ▼
+Published Version ────────┐
+   │                      │
+   ▼                      │
+active_version            │
+   │                      │
+   ├──── active binding ──┤→ WeKnora KB
+   │                      │
+历史 published version ───┘ pinned binding / rollback
+```
 
-v0.3 adds a stable graph-visualization boundary without merging the WeKnora and CobraKnowledge storage models.
+### 关键原则
 
-- `cobra-graph-api` exposes one graph contract with `view=entity|ontology`.
-- **Entity graph** is read-only from WeKnora's existing Neo4j GraphRAG storage.
-- **Ontology graph** is projected from the ontology bound to the current WeKnora knowledge base.
-- The WeKnora overlay adds one `GraphExplorer` in the existing graph settings area with **实体图 / 本体图** switch buttons.
-- Wiki graph remains on the official WeKnora Wiki Browser.
-- Graph API authorization is delegated back to WeKnora RBAC.
-- WeKnora upstream remains clean: the integration is applied to a derived build tree.
+- 本体内容版本注册后不可覆盖；
+- 发布状态和本体 payload 分离；
+- 回滚只移动 `active_version`；
+- KB 可跟随 active，也可 pinned 固定版本；
+- GraphView/Planner/MCP 只依赖 Registry 接口，不依赖本体文件路径；
+- WeKnora 图谱页面接口不变，v0.4 不新增 WeKnora 上游改动。
 
-See `docs/GRAPH_VISUALIZATION.md` for deployment and UI details.
+## 三张图
 
-## Existing v0.2 core
+- **Wiki 图**：知识页面、主题和引用关系，负责解释与证据导航；
+- **实体图**：具体实体、属性、状态与业务关系，负责事实与关系检索；
+- **本体图**：Class、Property、Relation、Hierarchy、Domain/Range、SourceBinding、RetrievalPolicy，负责业务语义和检索控制。
 
-v0.3 keeps the v0.2 retrieval and ontology core:
+## WeKnora 页面
 
-- native bottom-up ontology discovery from entity graph patterns;
-- stable machine IDs independent of Chinese naming;
-- conservative entity resolution;
-- Assertion/Evidence fact layer;
-- deterministic ontology and graph validation;
-- semantic catalog + retrieval planner;
-- freshness/source/time-aware Knowledge Arbiter;
-- concurrent Context Service + Context Pack;
-- WeKnora RAG/Chunk adapters;
-- MCP stdio server and domain Skills.
+v0.3 已增加统一 `GraphExplorer`：
 
-## Quick start
+```text
+图谱区域
+┌────────────┬────────────┐
+│   实体图    │   本体图    │
+└────────────┴────────────┘
+```
+
+v0.4 **不修改这个前端组件**。请求仍然是：
+
+```text
+GET /api/v1/knowledge-bases/{kb_id}/graph?view=entity
+GET /api/v1/knowledge-bases/{kb_id}/graph?view=ontology
+```
+
+本体图的数据解析由 CobraKnowledge 内部从文件绑定切换到 Registry。
+
+## 快速开始
 
 ```bash
 make test
@@ -61,7 +86,7 @@ make vet
 make build
 ```
 
-Bootstrap a candidate ontology from a WeKnora `GraphData` export:
+生成候选本体：
 
 ```bash
 bin/cobra-knowledge bootstrap \
@@ -70,71 +95,111 @@ bin/cobra-knowledge bootstrap \
   -out out/bootstrap
 ```
 
-## Graph API
-
-Create a KB-to-ontology binding file from `configs/ontology-bindings.example.json`, then:
+注册：
 
 ```bash
+bin/cobra-knowledge registry-register \
+  -root var/ontology-registry \
+  -ontology out/bootstrap/candidate-ontology.json \
+  -actor operator
+```
+
+审核完成后先生成新的 approved 快照，再注册、发布：
+
+```bash
+bin/cobra-knowledge approve-ontology \
+  -ontology out/bootstrap/candidate-ontology.json \
+  -version 1.0.0 \
+  -reviewer reviewer \
+  -out out/approved-ontology.json
+
+bin/cobra-knowledge registry-register \
+  -root var/ontology-registry \
+  -ontology out/approved-ontology.json \
+  -actor reviewer
+
+bin/cobra-knowledge registry-publish \
+  -root var/ontology-registry \
+  -ontology-id <ontology_id> \
+  -version 1.0.0 \
+  -actor reviewer
+```
+
+绑定知识库：
+
+```bash
+bin/cobra-knowledge registry-bind \
+  -root var/ontology-registry \
+  -kb <weknora_kb_id> \
+  -ontology-id <ontology_id> \
+  -mode active
+```
+
+## API 启动
+
+```bash
+export COBRA_ONTOLOGY_REGISTRY_ROOT=/app/data/ontology-registry
+export COBRA_REGISTRY_ADMIN_TOKEN='replace-with-random-token'
 export COBRA_NEO4J_URL=http://neo4j:7474
 export COBRA_NEO4J_USER=neo4j
 export COBRA_NEO4J_PASSWORD='***'
-export COBRA_ONTOLOGY_BINDINGS=/app/configs/ontology-bindings.json
 export COBRA_WEKNORA_BASE_URL=http://weknora:8080
 export COBRA_GRAPH_AUTH_MODE=weknora
 
 bin/cobra-graph-api -listen :8090
 ```
 
-Endpoints:
+Graph UI 的读权限继续委托 WeKnora RBAC；Registry 治理 API 使用独立管理员 Token。
 
-```text
-GET /healthz
-GET /api/v1/knowledge-bases/{kb_id}/graph?view=entity&limit=160
-GET /api/v1/knowledge-bases/{kb_id}/graph?view=ontology
-```
+## MCP
 
-## WeKnora UI overlay
+生产推荐从 Registry 解析正式本体：
 
 ```bash
-./integrations/weknora/apply-overlay.sh \
-  ../upstream/weknora \
-  ../build/weknora-v0.3
-```
-
-Build/run WeKnora from the derived directory. The upstream checkout stays untouched and can continue to `git pull` normally.
-
-Prefer a same-origin reverse proxy:
-
-```nginx
-location /cobra-knowledge/ {
-    proxy_pass http://cobra-graph-api:8090/;
-    proxy_set_header Authorization $http_authorization;
-    proxy_set_header X-Tenant-ID $http_x_tenant_id;
-    proxy_set_header Accept-Language $http_accept_language;
-}
-```
-
-## MCP runtime
-
-The Agent-facing path is unchanged:
-
-```bash
-export COBRA_ONTOLOGY_FILE=/path/to/ontology.json
-export COBRA_ENTITY_GRAPH_FILE=/path/to/normalized-graph.json
-export WEKNORA_BASE_URL=http://localhost:8080
+export COBRA_ONTOLOGY_REGISTRY_ROOT=/app/data/ontology-registry
+export COBRA_ONTOLOGY_KB_ID=<weknora_kb_id>
+export WEKNORA_BASE_URL=http://weknora:8080
 export WEKNORA_API_KEY=sk-xxxxx
-export WEKNORA_KB_IDS=kb-1,kb-2
 
 go run ./cmd/context-mcp
 ```
 
-Production-facing tools remain intentionally small:
+`COBRA_ONTOLOGY_FILE` 仍可用于本地开发，但不再是生产推荐方式。
 
-- `context.retrieve`
-- `context.get_evidence`
+## 工程目录
 
-Fine-grained ontology/retrieval/arbitration tools remain for governance and audit.
+```text
+cobra-knowledge/
+├── cmd/
+│   ├── cobra/                 CLI / bootstrap / registry 管理
+│   ├── context-mcp/           Agent MCP
+│   └── graph-api/             Graph + Registry API
+├── internal/
+│   ├── ontology/              discovery / validator / compiler / registry
+│   ├── graph/                 entity resolution / assertion
+│   ├── graphview/             entity / ontology -> GraphView
+│   ├── retrieval/             semantic catalog / planner / arbiter
+│   ├── context/               retriever orchestration / Context Pack
+│   ├── httpapi/               Graph API + Registry API
+│   └── access/                WeKnora RBAC delegation
+├── integrations/weknora/      非侵入 Overlay
+├── prompts/
+├── skills/
+└── docs/
+```
 
-## Upstream isolation
+## 上游隔离
 
-CobraKnowledge never imports packages from WeKnora or Semantica. WeKnora integration is through HTTP/Neo4j read adapters and a derived frontend overlay. Semantica remains research input only. Upstream updates are absorbed at adapter/overlay boundaries instead of long-lived forks.
+WeKnora 与 Semantica 都不是 CobraKnowledge 内核源码的一部分：
+
+- WeKnora：知识/RAG/实体图底座之一，通过 API、Neo4j 只读适配器和派生 Overlay 集成；
+- Semantica：本体构建、Provenance、Conflict、Validation 等方法参考，无运行时依赖；
+- CobraKnowledge：独立维护本体、检索策略、冲突裁决和 Context 能力。
+
+详见：
+
+- `ARCHITECTURE.md`
+- `docs/ONTOLOGY_REGISTRY.md`
+- `docs/GRAPH_VISUALIZATION.md`
+- `docs/MODULES.md`
+- `RELEASE-v0.4.md`

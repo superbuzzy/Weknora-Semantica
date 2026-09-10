@@ -2,11 +2,6 @@ package graphview
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"cobraknowledge.local/cobra-knowledge/internal/model"
 )
@@ -21,56 +16,29 @@ type OntologySource interface {
 	OntologyView(ctx context.Context, knowledgeBaseID string) (model.GraphView, error)
 }
 
-// FileOntologyBindings is deliberately external to the ontology itself. A domain ontology
-// can be reused by multiple knowledge bases without copying or mutating it.
-type FileOntologyBindings struct {
-	BaseDir  string            `json:"-"`
-	Bindings map[string]string `json:"knowledge_bases"`
-	Default  string            `json:"default_ontology,omitempty"`
+// OntologyResolver is the storage-neutral registry contract required by visualization.
+// It intentionally exposes no filesystem path or database implementation detail.
+type OntologyResolver interface {
+	ResolveForKnowledgeBase(ctx context.Context, knowledgeBaseID string) (model.OntologyResolution, error)
 }
 
-func LoadFileOntologyBindings(path string) (*FileOntologyBindings, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read ontology bindings: %w", err)
-	}
-	var b FileOntologyBindings
-	if err := json.Unmarshal(data, &b); err != nil {
-		return nil, fmt.Errorf("decode ontology bindings: %w", err)
-	}
-	b.BaseDir = filepath.Dir(path)
-	if b.Bindings == nil {
-		b.Bindings = map[string]string{}
-	}
-	return &b, nil
+// RegistryOntologySource makes the WeKnora UI consume the active/pinned ontology
+// through the registry lifecycle instead of reading a binding-to-file configuration.
+type RegistryOntologySource struct {
+	Registry OntologyResolver
 }
 
-func (b *FileOntologyBindings) pathForKB(kbID string) (string, error) {
-	candidate := strings.TrimSpace(b.Bindings[kbID])
-	if candidate == "" {
-		candidate = strings.TrimSpace(b.Default)
-	}
-	if candidate == "" {
-		return "", fmt.Errorf("no ontology is bound to knowledge base %q", kbID)
-	}
-	if filepath.IsAbs(candidate) {
-		return candidate, nil
-	}
-	return filepath.Clean(filepath.Join(b.BaseDir, candidate)), nil
+func NewRegistryOntologySource(registry OntologyResolver) *RegistryOntologySource {
+	return &RegistryOntologySource{Registry: registry}
 }
 
-func (b *FileOntologyBindings) OntologyView(_ context.Context, kbID string) (model.GraphView, error) {
-	path, err := b.pathForKB(kbID)
+func (s *RegistryOntologySource) OntologyView(ctx context.Context, kbID string) (model.GraphView, error) {
+	resolution, err := s.Registry.ResolveForKnowledgeBase(ctx, kbID)
 	if err != nil {
 		return model.GraphView{}, err
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return model.GraphView{}, fmt.Errorf("read ontology %s: %w", path, err)
-	}
-	var o model.Ontology
-	if err := json.Unmarshal(data, &o); err != nil {
-		return model.GraphView{}, fmt.Errorf("decode ontology %s: %w", path, err)
-	}
-	return BuildOntologyView(kbID, o), nil
+	view := BuildOntologyView(kbID, resolution.Ontology)
+	view.Meta.OntologyState = string(resolution.Version.State)
+	view.Meta.BindingMode = resolution.Binding.Mode
+	return view, nil
 }
