@@ -1,6 +1,6 @@
-# v0.5 三图可视化：Knowledge 内的实体图 / 本体图
+# v0.6 三图可视化：Knowledge 内的实体图 / 本体图
 
-> v0.5 新增 OpenClaw 原生 Knowledge 页面，同样消费稳定 `GraphView` 展示实体图/本体图。v0.3 的 WeKnora `GraphExplorer` Overlay 继续保留兼容，但 v0.5 不再扩大 WeKnora 前端 Patch 面。
+> v0.6 的 OpenClaw 原生 Knowledge 页面继续消费稳定 `GraphView` 展示实体图/本体图；Graph API 授权只接受 LeeClaw 服务 Principal，不再转发用户 WeKnora Bearer。v0.3 的 WeKnora `GraphExplorer` Overlay 仅保留历史兼容，不再扩大 Patch 面。
 
 ## 1. 目标
 
@@ -34,31 +34,12 @@ CobraKnowledge 新增只读 `Neo4jHTTPSource`，按照 WeKnora 当前 `ENTITY<kb
 ```json
 {
   "nodes": [
-    {
-      "id": "class:line",
-      "label": "线路",
-      "kind": "class",
-      "metadata": {}
-    }
+    {"id": "class:line", "label": "线路", "kind": "class", "metadata": {}}
   ],
   "edges": [
-    {
-      "id": "relation:supplies:line:area",
-      "source": "class:line",
-      "target": "class:area",
-      "label": "供电",
-      "kind": "object_relation"
-    }
+    {"id": "relation:supplies:line:area", "source": "class:line", "target": "class:area", "label": "供电", "kind": "object_relation"}
   ],
-  "meta": {
-    "view": "ontology",
-    "knowledge_base_id": "kb-id",
-    "total_nodes": 10,
-    "returned_nodes": 10,
-    "returned_edges": 8,
-    "truncated": false,
-    "ontology_version": "1.0.0"
-  }
+  "meta": {"view": "ontology", "knowledge_base_id": "kb-id", "total_nodes": 10, "returned_nodes": 10, "returned_edges": 8, "truncated": false, "ontology_version": "1.0.0"}
 }
 ```
 
@@ -110,14 +91,12 @@ KB -> ontology_id@version   (pinned)
 
 ## 6. 权限
 
-生产默认 `COBRA_GRAPH_AUTH_MODE=weknora`。Graph API 收到页面请求后，将以下头转发给 WeKnora：
+生产默认 `COBRA_GRAPH_AUTH_MODE=weknora`。Graph API 不接收或透传 WeKnora 人类用户登录态。OpenClaw Knowledge Plugin 在服务端生成 LeeClaw Principal，Graph API 只把以下服务身份头委托给 WeKnora：
 
-- `Authorization`
-- `X-API-Key`
-- `X-Tenant-ID`
-- `X-External-User-ID`
-- `X-External-User-Token`
-- `Accept-Language`
+- `X-API-Key`：WeKnora 服务 API Key；
+- `X-Tenant-ID`：服务端解析后的 WeKnora Tenant；
+- `X-External-User-ID`：OpenClaw durable `profileId`；
+- `Accept-Language`。
 
 随后调用：
 
@@ -125,7 +104,7 @@ KB -> ontology_id@version   (pinned)
 GET /api/v1/knowledge-bases/{kb_id}
 ```
 
-只有 WeKnora 返回成功时才读取实体图/本体图。这使图谱查看沿用 WeKnora 原 RBAC 与跨空间权限，不在 CobraKnowledge 复制权限规则。
+只有 WeKnora 返回成功时才读取实体图/本体图。`Authorization` 与 `X-External-User-Token` 已从 v0.6 Graph 授权链路删除，避免重新引入第二套人类登录身份。WeKnora 服务 Key 应按 capability / `knowledge_base_ids` 最小授权，并启用 External Principal direct-header 模式。
 
 开发环境可显式设置 `COBRA_GRAPH_AUTH_MODE=off`，启动时会输出警告。
 
@@ -149,28 +128,26 @@ integrations/weknora/
 ```bash
 ./integrations/weknora/apply-overlay.sh \
   ../upstream/weknora \
-  ../build/weknora-v0.5
+  ../build/weknora-v0.6
 ```
 
 脚本复制出派生构建树后再应用补丁。`upstream/weknora` 不产生修改，因此以后仍可正常 `git pull`。如果官方 `GraphSettings.vue` 发生破坏性变化，补丁 dry-run 会直接失败，要求人工更新这一处适配，而不是静默覆盖官方新逻辑。
 
 ## 8. 反向代理
 
-推荐同源：
+Graph API 推荐只暴露在 LeeClaw 服务网络，由 Knowledge Adapter 服务端调用。若需要同源代理，代理层只允许服务 Principal 头：
 
 ```nginx
 location /cobra-knowledge/ {
     proxy_pass http://cobra-graph-api:8090/;
-    proxy_set_header Authorization $http_authorization;
     proxy_set_header X-API-Key $http_x_api_key;
     proxy_set_header X-Tenant-ID $http_x_tenant_id;
     proxy_set_header X-External-User-ID $http_x_external_user_id;
-    proxy_set_header X-External-User-Token $http_x_external_user_token;
     proxy_set_header Accept-Language $http_accept_language;
 }
 ```
 
-前端默认 `VITE_COBRA_KNOWLEDGE_API_BASE=/cobra-knowledge`。同源部署时不需要 CORS。
+浏览器不直接持有 WeKnora API Key；以上头应由可信 Gateway/BFF 注入，而不是接受客户端任意声明。
 
 ## 9. 当前仍保持的边界
 

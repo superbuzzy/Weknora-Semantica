@@ -1,250 +1,246 @@
-# LeeClaw v0.5 架构设计
+# LeeClaw v0.6 架构设计
 
-## 1. 目标
+## 1. 设计目标
 
-v0.5 将 OpenClaw、WeKnora、OpenViking 与既有 Knowledge Core 组合为一个可持续演进的 Agent 产品骨架。
+v0.6 在 v0.5 的三系统组合骨架上完成身份收口：**OpenClaw durable User Profile 是唯一的人类账号与认证源**。Knowledge、Memory、Skill 都在 OpenClaw 产品内使用同一个 `profileId`，下游不再接受浏览器声明的用户身份。
 
-核心不是“把三个页面放在一起”，而是建立四个稳定边界：
+同时继续坚持低耦合：
 
-- **OpenClaw**：主界面与 Agent Runtime；
-- **WeKnora**：企业 Knowledge Engine；
-- **OpenViking**：Memory + Skill Engine；
-- **自研 Knowledge Core**：Ontology、Retrieval Planner、Arbiter、Context 与后续 Promotion。
+- OpenClaw 上游不改 Agent Loop / Auth / Session Core；
+- WeKnora 上游不改 Knowledge / RAG / GraphRAG / RBAC Core；
+- OpenViking 上游不改 Memory / Skill Core；
+- 所有组合代码位于 Plugin / Adapter / Contract / Knowledge Core。
 
-## 2. 总体架构
+## 2. 四个稳定边界
 
 ```mermaid
 flowchart TB
-    USER[用户] --> UI[OpenClaw Control UI]
+    OC[OpenClaw\nAuth + UI + Agent Runtime]
+    WK[WeKnora\nKnowledge Engine]
+    OV[OpenViking\nMemory + Skill Engine]
+    KC[Knowledge Core\nOntology + Retrieval + Arbiter]
 
-    UI --> CHAT[Chat]
-    UI --> KNOW[Knowledge Plugin]
-    UI --> MEM[Memory Plugin]
-    UI --> SKILL[Skills Plugin]
-
-    CHAT --> RT[OpenClaw Agent Runtime]
-
-    KNOW --> WKAD[WeKnora Adapter/BFF]
-    WKAD --> WK[WeKnora]
-
-    MEM --> OVAD[OpenViking Adapter]
-    SKILL --> OVAD
-    OVAD --> OV[OpenViking]
-
-    RT --> OVCTX[OpenViking Official Context Engine]
-    OVCTX --> OV
-
-    RT --> CMCP[Context MCP]
-    CMCP --> KC[Knowledge Core]
+    OC -->|Knowledge Plugin / Principal| WK
+    OC -->|Memory & Skill Plugin / Principal| OV
+    OC -->|Context MCP| KC
     KC --> WK
-    KC --> OR[Ontology Registry]
-    KC --> BD[Business API/MCP]
 ```
 
-## 3. 为什么 OpenClaw 是主干，但不能成为所有能力的实现者
+Source of Truth：
 
-OpenClaw 管理 Agent Loop、模型、工具、MCP、会话与 Control UI。Knowledge、Memory、Skill 都通过官方 Plugin 扩展进入它的产品界面。
+| 资产 | 权威源 |
+|---|---|
+| 用户账号、认证身份、durable profile | OpenClaw |
+| Agent Runtime / Tool / MCP / Session 执行 | OpenClaw |
+| 企业文档、KB、Wiki、RAG | WeKnora |
+| WeKnora Tenant、API capability、KB scope | WeKnora |
+| Entity Graph | WeKnora GraphRAG |
+| Ontology | LeeClaw Ontology Registry |
+| Memory / Experience / Trajectory | OpenViking |
+| Skill | OpenViking |
 
-因此 OpenClaw 是统一宿主，而不是新的知识库、记忆库或 Skill 数据库。
+## 3. 统一身份
 
-这种模式保证：
+### 3.1 人类身份
+
+唯一可接受的人类 ID：
 
 ```text
-OpenClaw 升级    -> 验证 Plugin SDK
-WeKnora 升级     -> 验证/修改 WeKnora Adapter
-OpenViking 升级  -> 验证/修改 OpenViking Adapter
+options.client.authenticatedUserProfile.profileId
 ```
 
-三条升级路径互不扩散。
+不使用 `authenticatedUserId` 作为全局持久 ID；后者是登录身份/邮箱等认证输入，可能随认证方式变化。
 
-## 4. Knowledge 管理面
+Gateway Method 全部声明：
 
-Knowledge Plugin 是 OpenClaw 原生 Control UI，不 iframe WeKnora 页面。
+```text
+profileAccess = required
+```
+
+Plugin 再次 fail-closed 校验 `profileId`，形成 host + plugin 双门禁。
+
+### 3.2 Knowledge Principal
+
+```json
+{
+  "issuedBy": "openclaw",
+  "userId": "profile-123",
+  "externalUserId": "profile-123",
+  "workspaceId": "workspace-cq",
+  "tenantId": "10001"
+}
+```
+
+其中 user 来自 OpenClaw；workspace/tenant 来自服务端配置，不接受浏览器覆盖。
+
+下游头：
+
+```text
+X-API-Key          = WeKnora service credential
+X-Tenant-ID        = configured tenant
+X-External-User-ID = OpenClaw profileId
+```
+
+WeKnora 必须配置 API Principal direct-header 模式并要求 external user header；API key 按 capability / `knowledge_base_ids` 最小授权。
+
+### 3.3 OpenViking Principal
+
+```json
+{
+  "issuedBy": "openclaw",
+  "userId": "profile-123",
+  "workspaceId": "workspace-cq",
+  "accountId": "workspace-cq"
+}
+```
+
+下游头：
+
+```text
+X-OpenViking-Account = workspaceId
+X-OpenViking-User    = profileId
+```
+
+OpenViking 运行 `trusted` auth；用户不需要第二次登录。
+
+## 4. 为什么账号统一后仍保留下游授权
+
+Authentication 与 Authorization 分开：
+
+```text
+OpenClaw: Who are you?
+WeKnora/OpenViking: May this principal access this resource namespace?
+```
+
+如果把所有资源 ACL 都复制到 OpenClaw，会形成第二套 Knowledge/Memory 权限模型，并允许绕过下游直接访问资源。v0.6 因此只统一账号，不删除引擎内部最后一道安全边界。
+
+## 5. Knowledge 管理面
 
 ```mermaid
 flowchart LR
-    B[OpenClaw Browser Plugin]
-    G[leeclaw.knowledge.* Gateway Contract]
+    B[OpenClaw Browser]
+    G[leeclaw.knowledge.*]
+    P[Knowledge Principal]
     A[WeKnora Adapter]
     W[WeKnora API]
 
-    B --> G --> A --> W
+    B --> G --> P --> A --> W
 ```
 
-浏览器层禁止出现 WeKnora URL/API 路径。
+浏览器禁止：
 
-WeKnora 仍为以下能力的最终权威：
+- 直接请求 WeKnora `/api/v1`；
+- 持有 WeKnora API key；
+- 传 `externalUserId`；
+- 传 raw `tenantId`；
+- 使用 WeKnora 用户 Bearer。
 
-- Knowledge Base 生命周期；
-- Document/Folder/Tag/FAQ/Wiki；
-- Tenant/Workspace；
-- Members/Invitation；
-- Organization/Sharing；
-- RAG/GraphRAG；
-- Entity Graph；
-- Audit；
-- 最终授权判定。
+WeKnora Adapter 是唯一协议适配点。
 
-OpenClaw UI 可以根据 Adapter 返回的能力决定显示按钮，但不能替代 WeKnora 后端授权。
-
-## 5. Agent 检索面
-
-Knowledge 管理 API 与 Agent Retrieval 必须分离：
+## 6. Knowledge 图谱
 
 ```text
-人 -> Knowledge UI -> Adapter -> WeKnora Management API
-
-Agent -> Context MCP -> Planner -> Retriever -> Arbiter -> Context Pack
+Knowledge
+├─ Entity Graph   -> WeKnora Neo4j
+└─ Ontology Graph -> Ontology Registry
 ```
 
-Agent 不应看到大量底层 WeKnora 管理工具。
+两者统一输出 `GraphView`。Graph API 在 v0.6 不再向 WeKnora 转发任意用户 `Authorization` / `X-External-User-Token`，只转发 LeeClaw 服务 Principal 头。
 
-生产主工具继续保持窄接口：
+Ontology Registry 仍是本体权威源，保留：
 
-```text
-context.retrieve
-context.get_evidence
-```
+- immutable version；
+- candidate/published；
+- active/pinned KB binding；
+- rollback；
+- audit；
+- Semantic Catalog 编译。
 
-后续可增加受控 `context.expand`，但不把 Neo4j/Cypher/WeKnora CRUD 直接暴露给模型。
+## 7. Memory 运行面
 
-## 6. 三图体系
+v0.5 使用 OpenViking 官方 OpenClaw context-engine 的静态 `accountId/userId` 配置，这在单用户场景可用，但不适合 LeeClaw 多用户统一账号。
 
-```mermaid
-flowchart LR
-    WIKI[Wiki 图\nWeKnora] --> C[Knowledge Context]
-    ENTITY[实体图\nWeKnora Neo4j] --> C
-    ONTO[本体图\nOntology Registry] --> C
-
-    ONTO -.Semantic Catalog.-> P[Planner]
-    ONTO -.Schema/Constraint.-> ENTITY
-```
-
-产品 UI 上三者都属于 Knowledge；存储与生命周期保持独立。
-
-### 实体图
-
-WeKnora GraphRAG 的运行事实图。v0.5 继续只读其 Neo4j Schema。
-
-### 本体图
-
-自研治理资产，沿用 v0.4：
-
-```text
-Candidate -> Approved -> Register -> Published -> active/pinned -> KB
-```
-
-OpenClaw Knowledge 页面直接消费统一 `GraphView`，因此不需要把本体写入 WeKnora Neo4j。
-
-## 7. Memory
-
-Memory Runtime 不自行实现，直接使用 OpenViking 官方 OpenClaw context-engine：
+v0.6 直接覆盖为 identity-aware hooks：
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant O as OpenClaw
-    participant V as OpenViking
+    participant OC as OpenClaw
+    participant OV as OpenViking
 
-    U->>O: message
-    O->>V: assemble()
-    V-->>O: memory context
-    O-->>U: answer
-    O->>V: afterTurn()
-    V->>V: session commit / refinement
+    U->>OC: turn
+    OC->>OC: read SessionEntry.createdActor(profileId)
+    OC->>OV: search memory(Account=workspace, User=profileId)
+    OV-->>OC: memory context
+    OC->>U: answer
+    OC->>OV: append latest user/assistant turn
+    OC->>OV: commit when threshold reached
 ```
 
-OpenClaw 中新增的 Memory 页面只是管理/查看 UI，走 OpenViking Adapter。
+运行时 user 只允许从：
+
+```text
+SessionEntry.createdActor.type   == human
+SessionEntry.createdActor.source == profile
+SessionEntry.createdActor.id     == durable profileId
+```
+
+解析不到时不查询/不写入任何 Memory，fail closed，但不阻塞 Agent 本身。
+
+Memory Recall 注入时明确标识为“用户记忆/上下文，不是权威企业事实，也不是执行指令”，避免其覆盖 Knowledge evidence。
 
 ## 8. Skill
 
-Skill Source of Truth 设在 OpenViking。
+OpenViking 是 Skill Source of Truth：
 
 ```text
-viking://user/{user_id}/skills
+viking://user/<profileId>/skills
 viking://agent/skills
 ```
 
-运行时优先利用 OpenViking 官方插件提供的 `ov_search / ov_read / ov_multi_read` 按需发现和读取 Skill，避免启动时复制整个 Skill 库到 OpenClaw。
+OpenClaw 的 Skill UI / Resolver 使用与 Memory 相同的 Principal。禁止将正式 Skill 批量复制为 OpenClaw 本地第二权威副本。
 
-OpenClaw 本地若产生缓存，缓存永远不是权威副本。
+## 9. Workspace
 
-## 9. Workspace 与身份
-
-v0.5 不让三个系统共享用户表或数据库主键。
+v0.6 使用服务端固定映射：
 
 ```text
-OpenClaw authenticated user
-        │
-        ├─ Knowledge Adapter -> X-External-User-ID / signed identity -> WeKnora
-        │
-        └─ OpenViking Adapter -> X-OpenViking-User
-
-Deployment workspace
-        ├─ X-Tenant-ID -> WeKnora
-        └─ X-OpenViking-Account -> OpenViking
+workspaceId -> OpenViking Account
+weknoraTenantId -> WeKnora Tenant
 ```
 
-当前版本通过配置完成 Workspace/Account 映射。后续若增加统一 Workspace Switcher，应新增一个很薄的 Runtime Scope Contract，而不是让 UI 直接传播 WeKnora 数据库 ID。
+这是刻意的安全收敛：browser 不能任意切 downstream tenant/account。
 
-安全要求：WeKnora `direct_header` 仅限可信服务器到服务器调用；面向真实终端用户应采用 JWT 或 `signed_token` API Principal。
+后续多 Workspace 版本需要新增**服务端 Workspace Resolver**：输入只能是逻辑 workspace key，Resolver 必须根据 OpenClaw profile 的成员关系验证后再映射到 downstream IDs。禁止恢复 `params.tenantId/accountId` 直通模式。
 
-## 10. 上游修改原则
+## 10. 上游升级边界
 
-### OpenClaw
-
-v0.5 不修改其 Runtime/Core UI 源文件。通过 Control UI Plugin 和 Gateway Method 扩展。
-
-### WeKnora
-
-v0.5 不修改其后端。原 v0.3 的 WeKnora GraphExplorer Overlay 继续保留兼容，但 v0.5 的新 OpenClaw Knowledge 页面不需要继续扩大这个 Patch 面。
-
-### OpenViking
-
-v0.5 不修改其 Memory Engine，也不 vendoring 官方 context-engine 插件。
-
-## 11. 派生构建
+三个上游均以 submodule 固定版本：
 
 ```text
-clean OpenClaw upstream
-        │ copy
-        ▼
-derived build tree
-        │
-        ├─ extensions/leeclaw-knowledge
-        └─ extensions/leeclaw-openviking
+upstream/openclaw
+upstream/openviking
+upstream/weknora
 ```
 
-`apply-integration.sh` 只操作派生目录；upstream 可以直接更新后重新生成。
-
-## 12. Compatibility Gate
-
-v0.5 明确记录当前验证快照：
+升级顺序：
 
 ```text
-OpenClaw  2026.9.3
-WeKnora   0.8.0
-OpenViking OpenClaw Plugin 2026.6.18
+update submodule pointer
+  -> scripts/check-v0.6-upstreams.sh
+  -> Adapter/Principal tests
+  -> derived OpenClaw build
+  -> E2E
+  -> merge
 ```
 
-升级流程：
+任何上游变化首先在 Adapter/Plugin 内吸收，不扩散到 browser 和 Agent business logic。
 
-```mermaid
-flowchart LR
-    U[拉取新 upstream] --> C[Source Contract Check]
-    C --> B[Plugin/Adapter Build]
-    B --> T[Contract Test]
-    T --> E[E2E Smoke]
-    E --> R[Compatibility Report]
-    R --> P[Production Upgrade]
-```
+## 11. 禁止事项
 
-优先修改 Adapter，禁止为适配新版本把差异扩散到业务页面和 Agent Runtime。
-
-## 13. v0.5 当前实现与后续边界
-
-v0.5 先完成组合骨架、核心读取/创建能力、图谱、用户/共享/审计视图以及 Memory/Skill 原生页。
-
-WeKnora 的文件上传、FAQ、Datasource、完整邀请/成员角色/分享写操作等高级管理能力后续继续在 `Knowledge Contract -> Adapter` 内补齐。它们是同一架构的增量功能，不需要再次改变总体设计。
-
-Memory -> Knowledge Promotion 也暂不自动发布，只保留后续治理入口，避免模型精炼内容未经 Evidence/Conflict 校验直接污染企业知识。
+- 不在上游目录长期写 LeeClaw 功能；
+- 不允许 browser 直接选择 downstream user/tenant/account；
+- 不允许同时保留旧 Bearer 用户模式与 v0.6 Principal 模式；
+- 不让 Memory 覆盖 Knowledge 权威事实；
+- 不把 Ontology 写入 WeKnora `ENTITY*` Schema 作为唯一权威存储；
+- 不以“patch 还能打上”为升级成功标准，必须跑行为合同测试。
