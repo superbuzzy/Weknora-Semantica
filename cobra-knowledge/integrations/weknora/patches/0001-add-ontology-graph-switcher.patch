@@ -1,0 +1,22 @@
+--- a/frontend/src/views/knowledge/settings/GraphSettings.vue
++++ b/frontend/src/views/knowledge/settings/GraphSettings.vue
+@@ -315,6 +315,11 @@
+           </div>
+         </div>
+       </div>
++
++      <!-- CobraKnowledge v0.3: entity / ontology graph switcher -->
++      <div class="setting-row vertical">
++        <GraphExplorer />
++      </div>
+     </div>
+   </div>
+ </template>
+@@ -326,6 +331,7 @@
+ import { extractTextRelations, fabriText, fabriTag, type Node, type Relation } from '@/api/initialization'
+ import { useEditorResourcesStore } from '@/stores/editorResources'
+ import { useAuthStore } from '@/stores/auth'
++import GraphExplorer from './GraphExplorer.vue'
+ 
+ const { t } = useI18n()
+ const authStore = useAuthStore()

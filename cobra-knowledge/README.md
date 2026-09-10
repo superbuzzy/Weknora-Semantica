@@ -1,63 +1,122 @@
-# CobraKnowledge v0.2
+# CobraKnowledge v0.3
 
-CobraKnowledge v0.2 is a Go-native enterprise knowledge retrieval and ontology control plane. It treats WeKnora as a replaceable knowledge source and Semantica as a design reference only. Neither upstream project is modified or required at runtime.
+CobraKnowledge is a Go-native enterprise Agent retrieval and context-governance core. WeKnora is a replaceable knowledge source, Semantica is a design reference only, and the CobraKnowledge runtime imports neither upstream project.
 
-## Core idea
+## Core architecture
 
 ```text
-Wiki Graph        Entity Graph        Ontology Graph        Business Data
-    \                 |                  /                     /
-     \                |                 /                     /
-              Retrieval Control Plane
-       Semantic Resolver -> Planner -> Retrievers
-                         -> Arbiter -> Context Assembler
-                                  |
-                              Context Pack
-                                  |
-                          Agent Runtime / Skill
+                           Agent Runtime
+                                │
+                              Skill
+                                │
+                         Context MCP / API
+                                │
+                    Retrieval Control Plane
+                 Resolver -> Planner -> Retrievers
+                           -> Arbiter -> Assembler
+                                │
+                            Context Pack
+
+Knowledge assets:
+  Wiki Graph        Entity Graph        Ontology Graph        Business Data
+  WeKnora           WeKnora Neo4j       CobraKnowledge        MCP / API
 ```
 
-The three graphs are knowledge assets. The core product is the retrieval strategy: what to search, where to search, how much evidence is enough, which source wins conflicts, and when retrieval should stop.
+The three graphs are knowledge assets. The core capability is the retrieval strategy: what to search, where to search, which evidence is trustworthy, how conflicts and freshness are handled, and when retrieval should stop.
 
-## v0.2 changes
+## v0.3: ontology graph visible in WeKnora
 
-- Rewritten from Python to Go 1.23, standard library only.
-- Removed Semantica runtime/import dependency.
-- Added native bottom-up ontology discovery from entity graph patterns.
-- Added stable machine IDs independent of Chinese-to-English naming.
-- Added conservative entity resolution and property-conflict preservation.
-- Added Assertion/Evidence fact layer.
-- Added deterministic ontology/graph validation.
-- Added fast retrieval planner and semantic catalog compiler.
-- Added freshness/source/time conflict arbiter.
-- Added concurrent Context Service and Context Pack assembler.
-- Added WeKnora RAG HTTP adapter and Chunk evidence resolver.
-- Added MCP stdio server with `context.retrieve` as the main Agent-facing entry.
-- Rebuilt ontology/retrieval Skills and prompts around the v0.2 contracts.
+v0.3 adds a stable graph-visualization boundary without merging the WeKnora and CobraKnowledge storage models.
+
+- `cobra-graph-api` exposes one graph contract with `view=entity|ontology`.
+- **Entity graph** is read-only from WeKnora's existing Neo4j GraphRAG storage.
+- **Ontology graph** is projected from the ontology bound to the current WeKnora knowledge base.
+- The WeKnora overlay adds one `GraphExplorer` in the existing graph settings area with **实体图 / 本体图** switch buttons.
+- Wiki graph remains on the official WeKnora Wiki Browser.
+- Graph API authorization is delegated back to WeKnora RBAC.
+- WeKnora upstream remains clean: the integration is applied to a derived build tree.
+
+See `docs/GRAPH_VISUALIZATION.md` for deployment and UI details.
+
+## Existing v0.2 core
+
+v0.3 keeps the v0.2 retrieval and ontology core:
+
+- native bottom-up ontology discovery from entity graph patterns;
+- stable machine IDs independent of Chinese naming;
+- conservative entity resolution;
+- Assertion/Evidence fact layer;
+- deterministic ontology and graph validation;
+- semantic catalog + retrieval planner;
+- freshness/source/time-aware Knowledge Arbiter;
+- concurrent Context Service + Context Pack;
+- WeKnora RAG/Chunk adapters;
+- MCP stdio server and domain Skills.
 
 ## Quick start
 
 ```bash
-go test ./...
-go build ./cmd/cobra
-go build ./cmd/context-mcp
+make test
+make vet
+make build
+```
 
-# Full bootstrap from a WeKnora GraphData export
-go run ./cmd/cobra bootstrap \
+Bootstrap a candidate ontology from a WeKnora `GraphData` export:
+
+```bash
+bin/cobra-knowledge bootstrap \
   -in examples/weknora-graph.json \
   -domain distribution_network \
   -out out/bootstrap
+```
 
-# Plan a query from the generated ontology
-go run ./cmd/cobra plan \
-  -ontology out/bootstrap/candidate-ontology.json \
-  -query '金牛线为什么转供能力不足？' \
-  -out out/retrieval-plan.json
+## Graph API
+
+Create a KB-to-ontology binding file from `configs/ontology-bindings.example.json`, then:
+
+```bash
+export COBRA_NEO4J_URL=http://neo4j:7474
+export COBRA_NEO4J_USER=neo4j
+export COBRA_NEO4J_PASSWORD='***'
+export COBRA_ONTOLOGY_BINDINGS=/app/configs/ontology-bindings.json
+export COBRA_WEKNORA_BASE_URL=http://weknora:8080
+export COBRA_GRAPH_AUTH_MODE=weknora
+
+bin/cobra-graph-api -listen :8090
+```
+
+Endpoints:
+
+```text
+GET /healthz
+GET /api/v1/knowledge-bases/{kb_id}/graph?view=entity&limit=160
+GET /api/v1/knowledge-bases/{kb_id}/graph?view=ontology
+```
+
+## WeKnora UI overlay
+
+```bash
+./integrations/weknora/apply-overlay.sh \
+  ../upstream/weknora \
+  ../build/weknora-v0.3
+```
+
+Build/run WeKnora from the derived directory. The upstream checkout stays untouched and can continue to `git pull` normally.
+
+Prefer a same-origin reverse proxy:
+
+```nginx
+location /cobra-knowledge/ {
+    proxy_pass http://cobra-graph-api:8090/;
+    proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-Tenant-ID $http_x_tenant_id;
+    proxy_set_header Accept-Language $http_accept_language;
+}
 ```
 
 ## MCP runtime
 
-Configure available sources with environment variables:
+The Agent-facing path is unchanged:
 
 ```bash
 export COBRA_ONTOLOGY_FILE=/path/to/ontology.json
@@ -69,34 +128,13 @@ export WEKNORA_KB_IDS=kb-1,kb-2
 go run ./cmd/context-mcp
 ```
 
-Main tools:
+Production-facing tools remain intentionally small:
 
 - `context.retrieve`
 - `context.get_evidence`
-- `retrieval.plan` (development/audit)
-- `ontology.discover` (development/governance)
-- `ontology.compile_weknora` (development/governance)
-- `knowledge.arbitrate` (development/audit)
+
+Fine-grained ontology/retrieval/arbitration tools remain for governance and audit.
 
 ## Upstream isolation
 
-The workspace keeps upstream code under `../upstream/` for research only. CobraKnowledge does not import packages from either upstream repository. Upstream changes are absorbed through Adapter contracts.
-
-See `ARCHITECTURE.md` and `docs/MODULES.md` for implementation details.
-
-### Domain semantic/policy overlay
-
-Ontology discovery intentionally does not invent domain synonyms. Put expert/Skill-maintained aliases and preferred sources in a separate overlay:
-
-```bash
-go run ./cmd/cobra plan \
-  -ontology out/bootstrap/candidate-ontology.json \
-  -overlay configs/semantic-overlay.json \
-  -query '金牛线为什么转供能力不足？'
-```
-
-For MCP runtime, set `COBRA_CATALOG_OVERLAY_FILE`. This keeps business policy separate from core code and from auto-discovered ontology candidates.
-
-### Upstream update discipline
-
-Run `scripts/check-upstream-clean.sh` before integrating a new upstream snapshot. If the upstream directories are real git clones, `scripts/sync-upstreams.sh` performs a fast-forward-only update. CobraKnowledge never writes into either upstream tree.
+CobraKnowledge never imports packages from WeKnora or Semantica. WeKnora integration is through HTTP/Neo4j read adapters and a derived frontend overlay. Semantica remains research input only. Upstream updates are absorbed at adapter/overlay boundaries instead of long-lived forks.

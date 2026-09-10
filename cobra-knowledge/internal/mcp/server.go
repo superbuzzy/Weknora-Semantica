@@ -111,7 +111,7 @@ func (s *Server) handle(ctx context.Context, req request) response {
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 	switch req.Method {
 	case "initialize":
-		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.2.0"}}
+		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.3.0"}}
 	case "notifications/initialized":
 		resp.Result = map[string]interface{}{}
 	case "tools/list":
@@ -149,28 +149,58 @@ func (s *Server) callTool(ctx context.Context, name string, args json.RawMessage
 		if s.WeKnora == nil {
 			return nil, fmt.Errorf("WEKNORA_BASE_URL is not configured")
 		}
-		var p struct { ChunkID string `json:"chunk_id"` }
-		if err := json.Unmarshal(args, &p); err != nil { return nil, err }
-		if p.ChunkID == "" { return nil, fmt.Errorf("chunk_id is required") }
+		var p struct {
+			ChunkID string `json:"chunk_id"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			return nil, err
+		}
+		if p.ChunkID == "" {
+			return nil, fmt.Errorf("chunk_id is required")
+		}
 		return s.WeKnora.GetChunk(ctx, p.ChunkID)
 	case "retrieval.plan":
-		var p struct { Ontology model.Ontology `json:"ontology"`; Request model.QueryRequest `json:"request"` }
-		if err := json.Unmarshal(args, &p); err != nil { return nil, err }
+		var p struct {
+			Ontology model.Ontology     `json:"ontology"`
+			Request  model.QueryRequest `json:"request"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			return nil, err
+		}
 		return retrievalsvc.NewPlanner(retrievalsvc.CompileCatalog(p.Ontology)).Plan(p.Request), nil
 	case "ontology.discover":
-		var p struct { Graph model.GraphSnapshot `json:"graph"` }
-		if err := json.Unmarshal(args, &p); err != nil { return nil, err }
+		var p struct {
+			Graph model.GraphSnapshot `json:"graph"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			return nil, err
+		}
 		o, report, err := ontsvc.NewDiscoveryService(nil).Discover(ctx, p.Graph)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		return map[string]interface{}{"ontology": o, "pattern_report": report}, nil
 	case "ontology.compile_weknora":
-		var p struct { Ontology model.Ontology `json:"ontology"` }
-		if err := json.Unmarshal(args, &p); err != nil { return nil, err }
+		var p struct {
+			Ontology model.Ontology `json:"ontology"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			return nil, err
+		}
 		return ontsvc.CompileWeKnora(p.Ontology), nil
 	case "knowledge.arbitrate":
-		var p struct { Assertions []model.Assertion `json:"assertions"`; Policy retrievalsvc.ArbitrationPolicy `json:"policy"`; At *time.Time `json:"at,omitempty"` }
-		if err := json.Unmarshal(args, &p); err != nil { return nil, err }
-		qt := time.Now().UTC(); if p.At != nil { qt = p.At.UTC() }
+		var p struct {
+			Assertions []model.Assertion              `json:"assertions"`
+			Policy     retrievalsvc.ArbitrationPolicy `json:"policy"`
+			At         *time.Time                     `json:"at,omitempty"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			return nil, err
+		}
+		qt := time.Now().UTC()
+		if p.At != nil {
+			qt = p.At.UTC()
+		}
 		return retrievalsvc.NewArbiter(p.Policy).Arbitrate(p.Assertions, qt), nil
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
@@ -187,7 +217,23 @@ func toolDefinitions() []map[string]interface{} {
 		{"name": "knowledge.arbitrate", "description": "按有效时间、来源策略、置信度和观测时间裁决 Assertion 冲突。", "inputSchema": objSchema(map[string]interface{}{"assertions": map[string]string{"type": "array"}, "policy": map[string]string{"type": "object"}}, []string{"assertions"})},
 	}
 }
-func objSchema(props interface{}, required []string) map[string]interface{} { return map[string]interface{}{"type": "object", "properties": props, "required": required} }
-func toolResult(v interface{}) map[string]interface{} { raw, _ := json.MarshalIndent(v, "", "  "); return map[string]interface{}{"content": []map[string]string{{"type": "text", "text": string(raw)}}, "structuredContent": v} }
-func toolError(err error) map[string]interface{} { return map[string]interface{}{"isError": true, "content": []map[string]string{{"type": "text", "text": err.Error()}}} }
-func splitEnvList(v string) []string { var out []string; for _, x := range strings.Split(v, ",") { x = strings.TrimSpace(x); if x != "" { out = append(out, x) } }; return out }
+func objSchema(props interface{}, required []string) map[string]interface{} {
+	return map[string]interface{}{"type": "object", "properties": props, "required": required}
+}
+func toolResult(v interface{}) map[string]interface{} {
+	raw, _ := json.MarshalIndent(v, "", "  ")
+	return map[string]interface{}{"content": []map[string]string{{"type": "text", "text": string(raw)}}, "structuredContent": v}
+}
+func toolError(err error) map[string]interface{} {
+	return map[string]interface{}{"isError": true, "content": []map[string]string{{"type": "text", "text": err.Error()}}}
+}
+func splitEnvList(v string) []string {
+	var out []string
+	for _, x := range strings.Split(v, ",") {
+		x = strings.TrimSpace(x)
+		if x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
+}

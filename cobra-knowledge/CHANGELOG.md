@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.3.0
+
+### Graph visualization
+- Added a stable `GraphView` contract shared by entity and ontology visualization.
+- Added ontology graph projection for classes, data properties, hierarchy and object relations.
+- Added read-only WeKnora Neo4j entity graph source through the Neo4j transactional HTTP endpoint.
+- Added KB-scoped graph HTTP API with `view=entity|ontology`.
+- Added knowledge-base-to-ontology external binding configuration.
+
+### WeKnora UI integration
+- Added a derived WeKnora overlay with a reusable `GraphExplorer.vue`.
+- Added an `实体图 / 本体图` switch in the existing graph settings area.
+- Kept Wiki graph on the existing WeKnora Wiki Browser.
+- Added overlay application script that never modifies the upstream checkout.
+
+### Security and compatibility
+- Delegated graph-view authorization to WeKnora RBAC using the caller's Authorization and tenant headers.
+- Kept WeKnora Neo4j schema read-only and unchanged.
+- Kept Semantica as a research reference only; no runtime dependency.
+
+
 ## v0.2.0
 
 ### Architecture

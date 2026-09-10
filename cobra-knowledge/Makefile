@@ -1,12 +1,16 @@
-.PHONY: test build demo clean
+.PHONY: test vet build demo clean
 
 test:
 	go test ./...
+
+vet:
+	go vet ./...
 
 build:
 	mkdir -p bin
 	go build -o bin/cobra-knowledge ./cmd/cobra
 	go build -o bin/cobra-context-mcp ./cmd/context-mcp
+	go build -o bin/cobra-graph-api ./cmd/graph-api
 
 demo: build
 	bin/cobra-knowledge bootstrap -in examples/weknora-graph.json -domain distribution_network -out out/bootstrap
