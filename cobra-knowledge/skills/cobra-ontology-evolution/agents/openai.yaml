@@ -1,0 +1,3 @@
+interface:
+  display_name: "Cobra 本体演进"
+  short_description: "从实体图发现并治理企业本体，反向约束持续构图。"

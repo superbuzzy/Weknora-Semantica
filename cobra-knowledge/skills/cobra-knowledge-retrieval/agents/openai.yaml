@@ -1,0 +1,3 @@
+interface:
+  display_name: "Cobra 可信检索"
+  short_description: "规划多源检索，处理冲突与时效，组装可追溯上下文。"
