@@ -1,4 +1,6 @@
-# v0.4 三图可视化：实体图 / 本体图切换
+# v0.5 三图可视化：Knowledge 内的实体图 / 本体图
+
+> v0.5 新增 OpenClaw 原生 Knowledge 页面，同样消费稳定 `GraphView` 展示实体图/本体图。v0.3 的 WeKnora `GraphExplorer` Overlay 继续保留兼容，但 v0.5 不再扩大 WeKnora 前端 Patch 面。
 
 ## 1. 目标
 
@@ -111,7 +113,10 @@ KB -> ontology_id@version   (pinned)
 生产默认 `COBRA_GRAPH_AUTH_MODE=weknora`。Graph API 收到页面请求后，将以下头转发给 WeKnora：
 
 - `Authorization`
+- `X-API-Key`
 - `X-Tenant-ID`
+- `X-External-User-ID`
+- `X-External-User-Token`
 - `Accept-Language`
 
 随后调用：
@@ -144,7 +149,7 @@ integrations/weknora/
 ```bash
 ./integrations/weknora/apply-overlay.sh \
   ../upstream/weknora \
-  ../build/weknora-v0.4
+  ../build/weknora-v0.5
 ```
 
 脚本复制出派生构建树后再应用补丁。`upstream/weknora` 不产生修改，因此以后仍可正常 `git pull`。如果官方 `GraphSettings.vue` 发生破坏性变化，补丁 dry-run 会直接失败，要求人工更新这一处适配，而不是静默覆盖官方新逻辑。
@@ -157,7 +162,10 @@ integrations/weknora/
 location /cobra-knowledge/ {
     proxy_pass http://cobra-graph-api:8090/;
     proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-API-Key $http_x_api_key;
     proxy_set_header X-Tenant-ID $http_x_tenant_id;
+    proxy_set_header X-External-User-ID $http_x_external_user_id;
+    proxy_set_header X-External-User-Token $http_x_external_user_token;
     proxy_set_header Accept-Language $http_accept_language;
 }
 ```

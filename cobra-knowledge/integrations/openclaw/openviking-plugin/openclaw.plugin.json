@@ -1,0 +1,20 @@
+{
+  "id": "leeclaw-openviking",
+  "name": "LeeClaw Memory & Skills",
+  "description": "OpenClaw-native Memory and Skill management backed by OpenViking.",
+  "version": "0.5.0",
+  "activation": { "onStartup": true },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": { "type": "string" },
+      "apiKey": { "type": "string" },
+      "accountId": { "type": "string" },
+      "userId": { "type": "string" },
+      "forwardAuthenticatedUser": { "type": "boolean" },
+      "requestTimeoutMs": { "type": "number", "minimum": 1000, "maximum": 60000 }
+    },
+    "required": ["baseUrl"]
+  }
+}

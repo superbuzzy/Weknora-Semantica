@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.5.0
+
+- 新增 OpenClaw 原生 `leeclaw-knowledge` Control UI Plugin，通过 Gateway Contract + WeKnora Adapter 提供知识库管理体验，不 iframe WeKnora 页面。
+- Knowledge 页面首批集成 KB list/create、文档、Wiki、实体图/本体图、Workspace 成员、KB 分享和审计活动。
+- 新增 OpenClaw 原生 `leeclaw-openviking` Memory/Skills 页面；OpenViking 成为 Memory + Skill Source of Truth。
+- Memory Runtime 继续使用 OpenViking 官方 context-engine 插件，不复制 `assemble/afterTurn/compact`。
+- 新增 OpenClaw 派生构建脚本，保持 OpenClaw upstream 原目录不变。
+- 新增 OpenClaw / WeKnora / OpenViking 源码 Compatibility Gate 与版本矩阵。
+- 新增 WeKnora/OpenViking Adapter contract tests 以及浏览器层禁止直连上游 API 的门禁。
+- Graph API 的 WeKnora 授权委托新增 `X-API-Key`、`X-External-User-ID`、`X-External-User-Token` 透传。
+- 保留 v0.4 Ontology Registry、本体版本/发布/回滚/KB Binding；本体图继续属于 Knowledge 模块。
+- v0.5 不修改 OpenClaw、WeKnora、OpenViking 三套上游源码。
+
 ## v0.4.0
 
 - 新增正式 `ontology.Registry` 抽象与默认 `FSRegistry`。

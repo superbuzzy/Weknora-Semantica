@@ -11,7 +11,7 @@ import (
 )
 
 // WeKnoraAccessChecker delegates authorization to WeKnora instead of duplicating its RBAC.
-// The caller's Authorization and X-Tenant-ID headers are forwarded to the standard KB read API.
+// The caller's supported WeKnora identity headers are forwarded to the standard KB read API.
 type WeKnoraAccessChecker struct {
 	BaseURL string
 	Client  *http.Client
@@ -30,7 +30,7 @@ func (a *WeKnoraAccessChecker) CheckKnowledgeBaseAccess(ctx context.Context, kbI
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"Authorization", "X-Tenant-ID", "Accept-Language"} {
+	for _, name := range []string{"Authorization", "X-API-Key", "X-Tenant-ID", "X-External-User-ID", "X-External-User-Token", "Accept-Language"} {
 		if value := headers.Get(name); value != "" {
 			req.Header.Set(name, value)
 		}

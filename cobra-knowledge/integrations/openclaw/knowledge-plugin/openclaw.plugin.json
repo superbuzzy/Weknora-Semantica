@@ -1,0 +1,22 @@
+{
+  "id": "leeclaw-knowledge",
+  "name": "LeeClaw Knowledge",
+  "description": "OpenClaw-native knowledge management backed by WeKnora, with entity/ontology graph views.",
+  "version": "0.5.0",
+  "activation": { "onStartup": true },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "weknoraBaseUrl": { "type": "string" },
+      "weknoraBearerToken": { "type": "string" },
+      "weknoraApiKey": { "type": "string" },
+      "tenantId": { "type": ["string", "number"] },
+      "externalUserId": { "type": "string" },
+      "forwardAuthenticatedUser": { "type": "boolean" },
+      "graphApiBaseUrl": { "type": "string" },
+      "requestTimeoutMs": { "type": "number", "minimum": 1000, "maximum": 60000 }
+    },
+    "required": ["weknoraBaseUrl"]
+  }
+}

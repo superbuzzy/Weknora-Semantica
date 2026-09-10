@@ -1,0 +1,39 @@
+{
+  "plugins": {
+    "entries": {
+      "leeclaw-knowledge": {
+        "enabled": true,
+        "config": {
+          "weknoraBaseUrl": "http://weknora:8080",
+          "weknoraApiKey": "${WEKNORA_API_KEY}",
+          "tenantId": "${WEKNORA_TENANT_ID}",
+          "forwardAuthenticatedUser": true,
+          "graphApiBaseUrl": "http://leeclaw-graph-api:8090"
+        }
+      },
+      "leeclaw-openviking": {
+        "enabled": true,
+        "config": {
+          "baseUrl": "http://openviking:1933",
+          "apiKey": "${OPENVIKING_API_KEY}",
+          "accountId": "${OPENVIKING_ACCOUNT_ID}",
+          "forwardAuthenticatedUser": true
+        }
+      },
+      "openviking": {
+        "enabled": true,
+        "config": {
+          "mode": "remote",
+          "baseUrl": "http://openviking:1933",
+          "apiKey": "${OPENVIKING_API_KEY}",
+          "accountId": "${OPENVIKING_ACCOUNT_ID}",
+          "recallTargetTypes": ["user", "agent"],
+          "enableAddResourceTool": false
+        }
+      }
+    },
+    "slots": {
+      "contextEngine": "openviking"
+    }
+  }
+}

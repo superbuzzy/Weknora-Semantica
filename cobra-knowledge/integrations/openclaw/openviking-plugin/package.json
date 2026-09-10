@@ -1,0 +1,37 @@
+{
+  "name": "openclaw-plugin-leeclaw-openviking",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "description": "Native OpenClaw Memory and Skills pages backed by OpenViking.",
+  "scripts": {
+    "build": "openclaw plugins build",
+    "validate": "openclaw plugins validate --json",
+    "pack": "openclaw plugins pack --json",
+    "test": "node --test test/*.test.js"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "browser",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.9.3"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "controlUi": "./browser/index.js",
+    "compat": {
+      "pluginApi": ">=2026.9.3"
+    }
+  }
+}
