@@ -14,6 +14,12 @@ function encodeQuery(params = {}) {
   return text ? `?${text}` : "";
 }
 
+function required(value, name) {
+  const text = String(value ?? "").trim();
+  if (!text) throw new Error(`leeclaw-knowledge: missing trusted ${name}`);
+  return text;
+}
+
 export class WeKnoraClient {
   constructor(config) {
     this.config = config;
@@ -22,15 +28,9 @@ export class WeKnoraClient {
   headers(context = {}, jsonBody = false) {
     const headers = { Accept: "application/json", "Accept-Language": "zh-CN" };
     if (jsonBody) headers["Content-Type"] = "application/json";
-    if (this.config.weknoraBearerToken) {
-      headers.Authorization = `Bearer ${this.config.weknoraBearerToken}`;
-    } else if (this.config.weknoraApiKey) {
-      headers["X-API-Key"] = this.config.weknoraApiKey;
-    }
-    const tenantId = context.tenantId ?? this.config.tenantId;
-    if (tenantId) headers["X-Tenant-ID"] = String(tenantId);
-    const externalUser = context.externalUserId ?? this.config.externalUserId;
-    if (externalUser) headers["X-External-User-ID"] = String(externalUser);
+    headers["X-API-Key"] = required(this.config.weknoraApiKey, "WeKnora service credential");
+    headers["X-Tenant-ID"] = required(context.tenantId, "WeKnora tenant");
+    headers["X-External-User-ID"] = required(context.externalUserId, "OpenClaw principal");
     return headers;
   }
 
@@ -59,9 +59,7 @@ export class WeKnoraClient {
     }
   }
 
-  health(context) {
-    return this.request("GET", "/api/v1/knowledge-bases", { context });
-  }
+  health(context) { return this.request("GET", "/api/v1/knowledge-bases", { context }); }
 
   async listKnowledgeBases(context, creator = "all") {
     const payload = await this.request("GET", `/api/v1/knowledge-bases${encodeQuery({ creator: creator === "all" ? undefined : creator })}`, { context });
@@ -90,39 +88,28 @@ export class WeKnoraClient {
   }
 
   async listDocuments(context, kbId, params = {}) {
-    const payload = await this.request(
-      "GET",
-      `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/knowledge${encodeQuery({
-        page: params.page ?? 1,
-        page_size: params.page_size ?? 100,
-        keyword: params.keyword,
-        parse_status: params.parse_status,
-        folder_path: params.folder_path,
-      })}`,
-      { context },
-    );
+    const payload = await this.request("GET", `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/knowledge${encodeQuery({
+      page: params.page ?? 1,
+      page_size: params.page_size ?? 100,
+      keyword: params.keyword,
+      parse_status: params.parse_status,
+      folder_path: params.folder_path,
+    })}`, { context });
     return { raw: unwrap(payload), items: asArray(payload, ["knowledge", "items"]) };
   }
 
   async listWikiPages(context, kbId, params = {}) {
-    const payload = await this.request(
-      "GET",
-      `/api/v1/knowledgebase/${encodeURIComponent(kbId)}/wiki/pages${encodeQuery({
-        page: params.page ?? 1,
-        page_size: params.page_size ?? 100,
-        query: params.query,
-      })}`,
-      { context },
-    );
+    const payload = await this.request("GET", `/api/v1/knowledgebase/${encodeURIComponent(kbId)}/wiki/pages${encodeQuery({
+      page: params.page ?? 1,
+      page_size: params.page_size ?? 100,
+      query: params.query,
+    })}`, { context });
     return { raw: unwrap(payload), items: asArray(payload, ["pages"]) };
   }
 
-  async listMembers(context, tenantId) {
-    const payload = await this.request(
-      "GET",
-      `/api/v1/tenants/${encodeURIComponent(String(tenantId))}/members?page=1&page_size=100`,
-      { context: { ...context, tenantId } },
-    );
+  async listMembers(context) {
+    const tenantId = required(context.tenantId, "WeKnora tenant");
+    const payload = await this.request("GET", `/api/v1/tenants/${encodeURIComponent(tenantId)}/members?page=1&page_size=100`, { context });
     return { raw: unwrap(payload), items: asArray(payload, ["members"]) };
   }
 
@@ -137,13 +124,10 @@ export class WeKnoraClient {
   }
 
   async graph(context, kbId, view = "entity") {
-    if (!this.config.graphApiBaseUrl) {
-      throw new Error("leeclaw-knowledge: graphApiBaseUrl is not configured");
-    }
-    return unwrap(await this.request(
-      "GET",
-      `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/graph?view=${view === "ontology" ? "ontology" : "entity"}&limit=180`,
-      { context, baseUrl: this.config.graphApiBaseUrl },
-    ));
+    if (!this.config.graphApiBaseUrl) throw new Error("leeclaw-knowledge: graphApiBaseUrl is not configured");
+    return unwrap(await this.request("GET", `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/graph?view=${view === "ontology" ? "ontology" : "entity"}&limit=180`, {
+      context,
+      baseUrl: this.config.graphApiBaseUrl,
+    }));
   }
 }

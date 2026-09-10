@@ -1,14 +1,7 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { resolveKnowledgeConfig } from "./lib/config.js";
+import { knowledgePrincipal } from "./lib/principal.js";
 import { WeKnoraClient } from "./lib/weknora-client.js";
-
-function principalFromRequest(options, config, params = {}) {
-  const authenticated = options.client?.authenticatedUserId;
-  return {
-    tenantId: params.tenantId ?? config.tenantId,
-    externalUserId: params.externalUserId ?? (config.forwardAuthenticatedUser ? authenticated : undefined) ?? config.externalUserId,
-  };
-}
 
 function requiredString(params, key) {
   const value = String(params?.[key] ?? "").trim();
@@ -22,10 +15,9 @@ function registerMethod(api, name, scope, handler) {
       const result = await handler(options);
       options.respond(true, result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      options.respond(false, { error: message });
+      options.respond(false, { error: error instanceof Error ? error.message : String(error) });
     }
-  }, { scope });
+  }, { scope, profileAccess: "required" });
 }
 
 export default definePluginEntry({
@@ -35,6 +27,7 @@ export default definePluginEntry({
   register(api) {
     const config = resolveKnowledgeConfig(api.pluginConfig ?? {});
     const client = new WeKnoraClient(config);
+    const principal = (options) => knowledgePrincipal(options.client, config);
 
     api.session.controls.registerControlUiDescriptor({
       surface: "tab",
@@ -46,32 +39,34 @@ export default definePluginEntry({
       requiredScopes: ["operator.read"],
     });
 
-    const ctx = (options) => principalFromRequest(options, config, options.params);
-
     registerMethod(api, "leeclaw.knowledge.health", "operator.read", async (options) => {
-      await client.health(ctx(options));
-      return { ok: true, weknora: config.weknoraBaseUrl, graph: config.graphApiBaseUrl || null };
+      const ctx = principal(options);
+      await client.health(ctx);
+      return {
+        ok: true,
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        weknora: config.weknoraBaseUrl,
+        graph: config.graphApiBaseUrl || null,
+      };
     });
     registerMethod(api, "leeclaw.knowledge.list", "operator.read", (options) =>
-      client.listKnowledgeBases(ctx(options), String(options.params.creator ?? "all")));
+      client.listKnowledgeBases(principal(options), String(options.params.creator ?? "all")));
     registerMethod(api, "leeclaw.knowledge.get", "operator.read", (options) =>
-      client.getKnowledgeBase(ctx(options), requiredString(options.params, "id")));
+      client.getKnowledgeBase(principal(options), requiredString(options.params, "id")));
     registerMethod(api, "leeclaw.knowledge.create", "operator.write", (options) =>
-      client.createKnowledgeBase(ctx(options), options.params));
+      client.createKnowledgeBase(principal(options), options.params));
     registerMethod(api, "leeclaw.knowledge.documents", "operator.read", (options) =>
-      client.listDocuments(ctx(options), requiredString(options.params, "kbId"), options.params));
+      client.listDocuments(principal(options), requiredString(options.params, "kbId"), options.params));
     registerMethod(api, "leeclaw.knowledge.wiki", "operator.read", (options) =>
-      client.listWikiPages(ctx(options), requiredString(options.params, "kbId"), options.params));
-    registerMethod(api, "leeclaw.knowledge.members", "operator.read", (options) => {
-      const tenantId = options.params.tenantId ?? config.tenantId;
-      if (!tenantId) throw new Error("tenantId is required for workspace members");
-      return client.listMembers(ctx(options), tenantId);
-    });
+      client.listWikiPages(principal(options), requiredString(options.params, "kbId"), options.params));
+    registerMethod(api, "leeclaw.knowledge.members", "operator.read", (options) =>
+      client.listMembers(principal(options)));
     registerMethod(api, "leeclaw.knowledge.shares", "operator.read", (options) =>
-      client.listShares(ctx(options), requiredString(options.params, "kbId")));
+      client.listShares(principal(options), requiredString(options.params, "kbId")));
     registerMethod(api, "leeclaw.knowledge.activity", "operator.read", (options) =>
-      client.listActivity(ctx(options), requiredString(options.params, "kbId")));
+      client.listActivity(principal(options), requiredString(options.params, "kbId")));
     registerMethod(api, "leeclaw.knowledge.graph", "operator.read", (options) =>
-      client.graph(ctx(options), requiredString(options.params, "kbId"), String(options.params.view ?? "entity")));
+      client.graph(principal(options), requiredString(options.params, "kbId"), String(options.params.view ?? "entity")));
   },
 });
