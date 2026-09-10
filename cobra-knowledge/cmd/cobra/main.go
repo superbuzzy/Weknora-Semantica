@@ -224,11 +224,11 @@ func bootstrapCmd(args []string) error {
 			return err
 		}
 	}
-	summary := map[string]interface{}{"version": "0.2.0", "entities": len(g.Entities), "relations": len(g.Relations), "classes": len(o.Classes), "properties": len(o.Properties), "ontology_relations": len(o.Relations), "review_items": len(o.ReviewQueue)}
+	summary := map[string]interface{}{"version": "0.3.0", "entities": len(g.Entities), "relations": len(g.Relations), "classes": len(o.Classes), "properties": len(o.Properties), "ontology_relations": len(o.Relations), "review_items": len(o.ReviewQueue)}
 	b, _ := json.MarshalIndent(summary, "", "  ")
 	fmt.Println(string(b))
 	return nil
 }
 func usage() {
-	fmt.Fprintln(os.Stderr, "cobra-knowledge v0.2\ncommands: normalize-weknora | resolve-entities | discover-ontology | compile-weknora | build-assertions | plan | arbitrate | bootstrap")
+	fmt.Fprintln(os.Stderr, "cobra-knowledge v0.3\ncommands: normalize-weknora | resolve-entities | discover-ontology | compile-weknora | build-assertions | plan | arbitrate | bootstrap")
 }

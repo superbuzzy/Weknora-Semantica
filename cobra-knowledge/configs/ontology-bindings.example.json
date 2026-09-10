@@ -1,0 +1,5 @@
+{
+  "knowledge_bases": {
+    "replace-with-weknora-kb-id": "../ontologies/distribution-network/1.0.0.json"
+  }
+}
