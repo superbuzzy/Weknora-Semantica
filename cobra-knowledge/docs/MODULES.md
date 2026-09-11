@@ -9,7 +9,7 @@ OpenClaw 原生 Knowledge / Workspaces 插件。
 核心子模块：
 
 - `browser/`：只调用 `leeclaw.*` Gateway Contract；
-- `lib/workspace-registry.js`：Workspace membership/role/selection/mapping；
+- `integrations/openclaw/workspace-core`：Workspace membership / role / selection / downstream mapping 的唯一实现；
 - `lib/principal.js`：OpenClaw profile → Knowledge Principal；
 - `lib/weknora-client.js`：唯一 WeKnora HTTP Adapter；
 - `lib/audit-log.js`：Workspace-scoped LeeClaw operation audit；
@@ -20,7 +20,7 @@ OpenClaw 原生 Knowledge / Workspaces 插件。
 OpenClaw 原生 Memory / Skill 插件。
 
 - `lib/principal.js`：OpenClaw profile/session owner → OpenViking Principal；
-- `lib/workspace-registry.js`：与 Knowledge 插件保持同一 Workspace Contract；
+- 通过 `@leeclaw/workspace-core` 复用同一 Workspace Contract，不维护第二份 Resolver；
 - `lib/client.js`：OpenViking HTTP Adapter；
 - `lib/memory-runtime.js`：`before_prompt_build / agent_end / before_reset` Memory 生命周期。
 

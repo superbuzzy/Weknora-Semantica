@@ -3,7 +3,7 @@ import { AuditLog } from "./lib/audit-log.js";
 import { resolveKnowledgeConfig } from "./lib/config.js";
 import { knowledgePrincipal, requireDurableProfileId } from "./lib/principal.js";
 import { WeKnoraClient } from "./lib/weknora-client.js";
-import { WorkspaceRegistry } from "./lib/workspace-registry.js";
+import { WorkspaceRegistry } from "@leeclaw/workspace-core";
 
 function requiredString(params, key) {
   const value = String(params?.[key] ?? "").trim();

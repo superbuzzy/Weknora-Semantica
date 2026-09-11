@@ -6,7 +6,7 @@ import path from "node:path";
 import { resolveKnowledgeConfig } from "../lib/config.js";
 import { knowledgePrincipal, requireDurableProfileId } from "../lib/principal.js";
 import { WeKnoraClient } from "../lib/weknora-client.js";
-import { WorkspaceRegistry } from "../lib/workspace-registry.js";
+import { WorkspaceRegistry } from "../../workspace-core/index.js";
 
 function jsonResponse(body, status = 200) { return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }); }
 async function withFetch(handler, fn) { const original=globalThis.fetch; globalThis.fetch=handler; try{await fn();}finally{globalThis.fetch=original;} }

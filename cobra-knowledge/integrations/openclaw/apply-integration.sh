@@ -52,12 +52,19 @@ copy_plugin() {
 copy_plugin knowledge
 copy_plugin openviking
 
+mkdir -p "$OUTPUT/packages/leeclaw-workspace-core"
+(
+  cd "$ROOT/integrations/openclaw/workspace-core"
+  tar --exclude='./node_modules' --exclude='./dist' -cf - .
+) | tar -xf - -C "$OUTPUT/packages/leeclaw-workspace-core"
+
 cat > "$OUTPUT/LEECLAW-V0.7-DERIVED.txt" <<'TXT'
 This is a derived OpenClaw build tree assembled by LeeClaw v0.7.
 No upstream OpenClaw file was modified in place.
-Added workspace extensions:
+Added LeeClaw components:
 - extensions/leeclaw-knowledge
 - extensions/leeclaw-openviking
+- packages/leeclaw-workspace-core
 OpenViking memory is connected by the identity-aware leeclaw-openviking hooks; do not configure the upstream static-user context-engine plugin in multi-user LeeClaw.
 TXT
 

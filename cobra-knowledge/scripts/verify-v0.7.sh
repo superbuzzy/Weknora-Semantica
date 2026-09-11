@@ -9,10 +9,13 @@ mkdir -p bin
 go build -o bin/cobra-knowledge ./cmd/cobra
 go build -o bin/cobra-context-mcp ./cmd/context-mcp
 go build -o bin/cobra-graph-api ./cmd/graph-api
-for f in integrations/openclaw/knowledge-plugin/index.js integrations/openclaw/knowledge-plugin/lib/*.js integrations/openclaw/knowledge-plugin/browser/index.js integrations/openclaw/openviking-plugin/index.js integrations/openclaw/openviking-plugin/lib/*.js integrations/openclaw/openviking-plugin/browser/index.js; do node --check "$f"; done
+for f in integrations/openclaw/workspace-core/index.js integrations/openclaw/knowledge-plugin/index.js integrations/openclaw/knowledge-plugin/lib/*.js integrations/openclaw/knowledge-plugin/browser/index.js integrations/openclaw/openviking-plugin/index.js integrations/openclaw/openviking-plugin/lib/*.js integrations/openclaw/openviking-plugin/browser/index.js; do node --check "$f"; done
+node --test integrations/openclaw/workspace-core/test/*.test.js
 node --test integrations/openclaw/knowledge-plugin/test/*.test.js
 node --test integrations/openclaw/openviking-plugin/test/*.test.js
-cmp integrations/openclaw/knowledge-plugin/lib/workspace-registry.js integrations/openclaw/openviking-plugin/lib/workspace-registry.js
+if find integrations/openclaw/knowledge-plugin integrations/openclaw/openviking-plugin -path "*/workspace-registry.js" -print -quit | grep -q .; then
+  echo "workspace registry must have one canonical implementation" >&2; exit 1
+fi
 if grep -R -E 'X-API-Key|X-Tenant-ID|X-OpenViking-(Account|User)|WEKNORA_API_KEY|OPENVIKING_API_KEY' integrations/openclaw/*-plugin/browser; then
   echo "browser must not know downstream credentials or trusted headers" >&2; exit 1
 fi

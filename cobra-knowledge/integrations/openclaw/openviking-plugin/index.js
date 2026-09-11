@@ -2,7 +2,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { OpenVikingClient, resolveOpenVikingConfig } from "./lib/client.js";
 import { registerIdentityAwareMemoryRuntime } from "./lib/memory-runtime.js";
 import { openVikingPrincipal } from "./lib/principal.js";
-import { WorkspaceRegistry } from "./lib/workspace-registry.js";
+import { WorkspaceRegistry } from "@leeclaw/workspace-core";
 
 function registerMethod(api, name, scope, handler) {
   api.registerGatewayMethod(name, async (options) => {

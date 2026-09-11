@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { WorkspaceRegistry } from "../lib/workspace-registry.js";
+import { WorkspaceRegistry } from "../index.js";
 
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "leeclaw-ws-"));
