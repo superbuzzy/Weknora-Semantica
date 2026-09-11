@@ -1,34 +1,28 @@
-# leeclaw-knowledge v0.7
+# leeclaw-knowledge v0.8
 
-OpenClaw 原生 Knowledge + Workspaces Feature Plugin。
+OpenClaw 原生 Knowledge 管理 + Agent Knowledge Runtime。
 
-## 作用
+## 管理面
 
-- 用 OpenClaw durable `profileId` 作为唯一人类身份；
-- 使用服务端 Workspace Registry 做成员、角色、当前 Workspace 和下游映射；
-- 将 WeKnora KB / Document / Wiki / FAQ / Tag / Search / Share 能力原生呈现在 OpenClaw；
-- 展示 Entity Graph / Ontology Graph；
-- 记录 LeeClaw Knowledge/Workspace 操作审计。
+保留 Knowledge Base、Document、Wiki、FAQ、Tag、Share、Entity/Ontology Graph、Audit 和 Workspace 管理。
 
-## 权限
+## Agent Runtime
+
+注册两个 OpenClaw Tool：
 
 ```text
-OpenClaw operator scope
-AND Workspace role
-AND WeKnora service capability/tenant boundary
+leeclaw_context_retrieve
+leeclaw_context_get_evidence
 ```
 
-浏览器只能请求逻辑 Workspace ID，不能提交下游 Tenant/Account/User/Credential。
+Tool Factory 只从 OpenClaw `sessionKey/sessionId` 恢复 durable profile 和 Session-bound Workspace。模型参数中没有 Workspace、Tenant、User、Account、Credential。
 
-## 配置
+`retrieve` 只能访问当前 Workspace 映射的 Knowledge Base Scope；`get_evidence` 读取 chunk 后会再次核验返回的 `knowledge_base_id`，防止已知 chunk id 绕过 Scope。
 
-见：
+## Core API
 
-- `configs/openclaw-v0.7.example.json`
-- `configs/workspaces-v0.7.example.json`
+`coreApiBaseUrl` 是 Graph + Runtime Context 的统一 LeeClaw Core API。OpenClaw Plugin 使用单独的 `LEECLAW_RUNTIME_TOKEN` 调 Runtime 路由，浏览器 CORS 不暴露任何 trusted runtime header。
 
-Workspace 文件中的 `weknora.apiKeyEnv` 仅是 Secret 环境变量名；Key 本身不写入 Registry。
+## Workspace
 
-## 上传边界
-
-当前 Control UI 文件上传使用 base64 RPC，默认 10 MiB、硬上限 50 MiB。后续大文件应改 authenticated streaming route。
+页面 Workspace 是 profile 默认空间；Agent Session 第一次运行后固定 Workspace。页面随后切换 Workspace 不会改变既有 Agent Session，新建或 reset 后的新 Session 才采用新的默认空间。

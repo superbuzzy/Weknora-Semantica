@@ -1,9 +1,6 @@
 import path from "node:path";
 
-function cleanUrl(value) {
-  return String(value ?? "").trim().replace(/\/+$/u, "");
-}
-
+function cleanUrl(value) { return String(value ?? "").trim().replace(/\/+$/u, ""); }
 function requiredString(value, name) {
   const text = String(value ?? "").trim();
   if (!text) throw new Error(`leeclaw-knowledge: ${name} is required`);
@@ -20,7 +17,8 @@ export function resolveKnowledgeConfig(raw = {}) {
   const uploadMaxBytes = Number(raw.uploadMaxBytes ?? process.env.LEECLAW_UPLOAD_MAX_BYTES ?? 10 * 1024 * 1024);
   return {
     weknoraBaseUrl,
-    graphApiBaseUrl: cleanUrl(raw.graphApiBaseUrl ?? process.env.LEECLAW_GRAPH_API_BASE_URL),
+    coreApiBaseUrl: requiredString(cleanUrl(raw.coreApiBaseUrl ?? process.env.LEECLAW_CORE_API_BASE_URL), "coreApiBaseUrl"),
+    runtimeToken: requiredString(raw.runtimeToken ?? process.env.LEECLAW_RUNTIME_TOKEN, "runtimeToken"),
     workspaceRegistryPath,
     workspaceStatePath,
     auditLogPath: requiredString(raw.auditLogPath ?? process.env.LEECLAW_AUDIT_LOG ?? path.join(path.dirname(defaultStatePath), "knowledge-audit.jsonl"), "auditLogPath"),

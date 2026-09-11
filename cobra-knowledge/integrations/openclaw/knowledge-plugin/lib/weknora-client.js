@@ -159,7 +159,7 @@ export class WeKnoraClient {
   async updateShare(context, kbId, shareId, permission) { return unwrap(await this.request("PUT", `/api/v1/knowledge-bases/${safeId(kbId)}/shares/${safeId(shareId, "shareId")}`, { context, body: { permission: String(permission ?? "viewer") } })); }
   async deleteShare(context, kbId, shareId) { return unwrap(await this.request("DELETE", `/api/v1/knowledge-bases/${safeId(kbId)}/shares/${safeId(shareId, "shareId")}`, { context })); }
   async graph(context, kbId, view = "entity") {
-    if (!this.config.graphApiBaseUrl) throw new Error("leeclaw-knowledge: graphApiBaseUrl is not configured");
-    return unwrap(await this.request("GET", `/api/v1/knowledge-bases/${safeId(kbId)}/graph?view=${view === "ontology" ? "ontology" : "entity"}&limit=240`, { context, baseUrl: this.config.graphApiBaseUrl }));
+    if (!this.config.coreApiBaseUrl) throw new Error("leeclaw-knowledge: coreApiBaseUrl is not configured");
+    return unwrap(await this.request("GET", `/api/v1/knowledge-bases/${safeId(kbId)}/graph?view=${view === "ontology" ? "ontology" : "entity"}&limit=240`, { context, baseUrl: this.config.coreApiBaseUrl }));
   }
 }

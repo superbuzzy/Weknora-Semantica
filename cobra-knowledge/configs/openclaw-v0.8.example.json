@@ -5,7 +5,8 @@
         "enabled": true,
         "config": {
           "weknoraBaseUrl": "http://weknora:8080",
-          "graphApiBaseUrl": "http://leeclaw-graph-api:8090",
+          "coreApiBaseUrl": "http://leeclaw-core-api:8090",
+          "runtimeToken": "${LEECLAW_RUNTIME_TOKEN}",
           "workspaceRegistryPath": "/etc/leeclaw/workspaces.json",
           "workspaceStatePath": "/var/lib/leeclaw/workspaces.state.json",
           "uploadMaxBytes": 10485760,
@@ -22,6 +23,10 @@
           "memoryRuntimeEnabled": true,
           "memoryRecallLimit": 8,
           "memoryMaxRecallChars": 12000,
+          "skillRuntimeEnabled": true,
+          "skillResolveLimit": 5,
+          "skillScoreThreshold": 0.62,
+          "skillMaxContentChars": 20000,
           "commitPendingTokens": 1200,
           "commitKeepRecentCount": 6
         }

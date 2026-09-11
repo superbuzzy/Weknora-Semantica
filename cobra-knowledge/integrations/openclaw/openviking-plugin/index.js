@@ -1,6 +1,6 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { OpenVikingClient, resolveOpenVikingConfig } from "./lib/client.js";
-import { registerIdentityAwareMemoryRuntime } from "./lib/memory-runtime.js";
+import { registerLeeClawAgentRuntime } from "./lib/agent-runtime.js";
 import { openVikingPrincipal } from "./lib/principal.js";
 import { WorkspaceRegistry } from "@leeclaw/workspace-core";
 
@@ -35,7 +35,7 @@ export default definePluginEntry({
     registerMethod(api, "leeclaw.skills.get", "operator.read", (options) => client.getSkill(principal(options), String(options.params.name ?? ""), options.params.targetUri ? String(options.params.targetUri) : undefined));
     registerMethod(api, "leeclaw.skills.workspace", "operator.read", (options) => ({ ...principal(options) }));
 
-    registerIdentityAwareMemoryRuntime(api, config, client, workspaces);
-    api.logger.info("leeclaw-openviking: v0.7 workspace-aware runtime enabled");
+    registerLeeClawAgentRuntime(api, config, client, workspaces);
+    api.logger.info("leeclaw-openviking: v0.8 Skill + Memory runtime enabled");
   },
 });

@@ -12,6 +12,9 @@ import (
 	"cobraknowledge.local/cobra-knowledge/internal/graphview"
 	"cobraknowledge.local/cobra-knowledge/internal/httpapi"
 	ontsvc "cobraknowledge.local/cobra-knowledge/internal/ontology"
+	"cobraknowledge.local/cobra-knowledge/internal/retrieval"
+	"cobraknowledge.local/cobra-knowledge/internal/runtimecontext"
+	"cobraknowledge.local/cobra-knowledge/internal/store"
 )
 
 func main() {
@@ -25,6 +28,8 @@ func main() {
 	authMode := flag.String("auth", envOr("COBRA_GRAPH_AUTH_MODE", "weknora"), "authorization mode: weknora or off")
 	registryAdminToken := flag.String("registry-admin-token", os.Getenv("COBRA_REGISTRY_ADMIN_TOKEN"), "admin token for ontology registry mutation/read APIs")
 	allowedOrigin := flag.String("cors-origin", os.Getenv("COBRA_GRAPH_CORS_ORIGIN"), "optional allowed CORS origin; prefer same-origin reverse proxy")
+	runtimeToken := flag.String("runtime-token", os.Getenv("LEECLAW_RUNTIME_TOKEN"), "LeeClaw internal runtime API bearer token")
+	catalogOverlayPath := flag.String("catalog-overlay", os.Getenv("COBRA_CATALOG_OVERLAY_FILE"), "optional semantic catalog overlay")
 	flag.Parse()
 
 	registry := ontsvc.NewFSRegistry(*registryRoot)
@@ -47,7 +52,20 @@ func main() {
 		log.Print("ontology registry admin API disabled: COBRA_REGISTRY_ADMIN_TOKEN is not configured")
 	}
 
+	var overlay retrieval.CatalogOverlay
+	if strings.TrimSpace(*catalogOverlayPath) != "" {
+		if err := store.ReadJSON(*catalogOverlayPath, &overlay); err != nil {
+			log.Fatalf("load catalog overlay: %v", err)
+		}
+	}
+	runtimeService := &runtimecontext.Service{DefaultWeKnoraBaseURL: *weknoraURL, Registry: registry, Overlay: overlay}
+	if strings.TrimSpace(*runtimeToken) == "" {
+		log.Print("runtime context API disabled: LEECLAW_RUNTIME_TOKEN is not configured")
+	}
+
 	server := &httpapi.Server{
+		RuntimeContext:     runtimeService,
+		RuntimeToken:       *runtimeToken,
 		EntitySource:       entitySource,
 		OntologySource:     ontologySource,
 		AccessChecker:      checker,
@@ -64,7 +82,7 @@ func main() {
 		WriteTimeout:      20 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("CobraKnowledge API v0.7 listening on %s; registry=%s", *listen, *registryRoot)
+	log.Printf("LeeClaw Core API v0.8 listening on %s; registry=%s", *listen, *registryRoot)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
