@@ -4,17 +4,22 @@ export function requireDurableProfileId(client) {
   return profileId;
 }
 
-export function openVikingPrincipal(client, config) {
-  const userId = requireDurableProfileId(client);
-  return Object.freeze({ issuedBy: "openclaw", workspaceId: config.workspaceId, accountId: config.workspaceId, userId });
+function fromWorkspace(profileId, workspace) {
+  return Object.freeze({ issuedBy: "openclaw", workspaceId: workspace.id, workspaceName: workspace.name, workspaceRole: workspace.role, accountId: workspace.openvikingAccountId, userId: profileId });
 }
 
-export function sessionPrincipal(api, config, sessionKey) {
+export function openVikingPrincipal(client, workspaceRegistry, requestedWorkspaceId) {
+  const profileId = requireDurableProfileId(client);
+  return fromWorkspace(profileId, workspaceRegistry.resolve(profileId, requestedWorkspaceId));
+}
+
+export function sessionPrincipal(api, workspaceRegistry, sessionKey) {
   const key = String(sessionKey ?? "").trim();
   if (!key) return null;
   const entry = api.runtime.agent.session.getSessionEntry({ sessionKey: key, readConsistency: "latest" });
   const actor = entry?.createdActor;
   if (actor?.type !== "human" || actor?.source !== "profile" || !String(actor.id ?? "").trim()) return null;
-  const userId = String(actor.id).trim();
-  return Object.freeze({ issuedBy: "openclaw-session", workspaceId: config.workspaceId, accountId: config.workspaceId, userId });
+  const profileId = String(actor.id).trim();
+  try { return fromWorkspace(profileId, workspaceRegistry.resolve(profileId)); }
+  catch { return null; }
 }

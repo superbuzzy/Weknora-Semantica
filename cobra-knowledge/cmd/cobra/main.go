@@ -236,7 +236,7 @@ func bootstrapCmd(args []string) error {
 			return err
 		}
 	}
-	summary := map[string]interface{}{"version": "0.6.0", "entities": len(g.Entities), "relations": len(g.Relations), "classes": len(o.Classes), "properties": len(o.Properties), "ontology_relations": len(o.Relations), "review_items": len(o.ReviewQueue)}
+	summary := map[string]interface{}{"version": "0.7.0", "entities": len(g.Entities), "relations": len(g.Relations), "classes": len(o.Classes), "properties": len(o.Properties), "ontology_relations": len(o.Relations), "review_items": len(o.ReviewQueue)}
 	b, _ := json.MarshalIndent(summary, "", "  ")
 	fmt.Println(string(b))
 	return nil
@@ -370,5 +370,5 @@ func printJSON(value interface{}) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "cobra-knowledge v0.6\ncommands: normalize-weknora | resolve-entities | discover-ontology | compile-weknora | build-assertions | plan | arbitrate | bootstrap | approve-ontology | registry-register | registry-publish | registry-activate | registry-bind | registry-resolve")
+	fmt.Fprintln(os.Stderr, "cobra-knowledge v0.7\ncommands: normalize-weknora | resolve-entities | discover-ontology | compile-weknora | build-assertions | plan | arbitrate | bootstrap | approve-ontology | registry-register | registry-publish | registry-activate | registry-bind | registry-resolve")
 }

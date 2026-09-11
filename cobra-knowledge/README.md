@@ -1,86 +1,53 @@
-# LeeClaw Knowledge Core v0.6
+# LeeClaw Knowledge Core v0.7
 
-> 本目录仍保留历史 `cobra-knowledge` 工程名，避免为了命名重构制造无关 Git 噪声。v0.6 的重点是身份与运行边界收口。
+> 本目录继续保留历史 `cobra-knowledge` 工程路径，避免为了命名重构制造大面积无关 Git diff；对外产品与插件统一使用 LeeClaw 命名。
 
-## 核心定位
-
-```text
-OpenClaw       = 唯一用户身份 + Agent Runtime + UI Host
-WeKnora        = Knowledge Engine
-OpenViking     = Memory + Skill Engine
-Knowledge Core = Ontology + Retrieval + Arbiter + Context
-```
-
-### v0.6 新的 Principal 链
+v0.7 的 Knowledge Core 与 OpenClaw/WeKnora/OpenViking 的边界已经固定：
 
 ```text
-OpenClaw authenticatedUserProfile.profileId
-        │
-        ├─ Knowledge Plugin
-        │      └─ X-External-User-ID -> WeKnora
-        │
-        └─ OpenViking Plugin
-               └─ X-OpenViking-User -> OpenViking
+OpenClaw            → 人类账号 / UI / Agent Runtime
+Workspace Registry  → 成员 / 角色 / 当前空间 / 下游映射
+WeKnora             → Knowledge Engine
+OpenViking          → Memory + Skill Engine
+Knowledge Core      → Ontology / GraphView / Retrieval Governance
 ```
 
-`tenant/account` 均由服务端 Workspace 配置产生；browser 无法覆盖。
+## v0.7 关键变化
+
+- 静态 `workspaceId / tenantId / accountId` 已被服务端 Workspace Resolver 替换；
+- Workspace 成员只绑定 OpenClaw durable `profileId`；
+- Knowledge Plugin 增加完整 KB/文档/Wiki/FAQ/Tag/共享管理闭环；
+- Memory/Skill 跟随同一 Workspace selection；
+- WeKnora JWT-only KB Activity 调用已删除，替换为 LeeClaw 服务端 Workspace 审计；
+- Entity Graph / Ontology Graph 继续统一使用稳定 GraphView；
+- 三套 upstream 继续保持零侵入。
 
 ## 目录
 
 ```text
-integrations/openclaw/
-├─ knowledge-plugin/
-│  ├─ browser/          # 只调 Gateway Contract
-│  ├─ lib/principal.js  # OpenClaw profile -> Knowledge Principal
-│  └─ lib/weknora-client.js
-└─ openviking-plugin/
-   ├─ browser/
-   ├─ lib/principal.js  # OpenClaw profile/session owner -> OV Principal
-   ├─ lib/client.js
-   └─ lib/memory-runtime.js
-
-internal/
-├─ ontology/
-├─ graphview/
-├─ access/
-├─ httpapi/
-├─ retrieval/
-└─ ...
+integrations/openclaw/knowledge-plugin   OpenClaw 原生 Knowledge/Workspace UI + WeKnora Adapter
+integrations/openclaw/openviking-plugin OpenClaw 原生 Memory/Skill UI + Memory Runtime
+internal/ontology                       Ontology Registry
+internal/graphview                      Entity/Ontology GraphView
+internal/retrieval                      Retrieval Planner / Context
+configs/                                v0.7 配置示例
+compatibility/                          上游契约基线
+scripts/                                本地/上游升级门禁
 ```
-
-## Memory Runtime
-
-v0.6 不再建议在多用户 LeeClaw 中配置 OpenViking 官方插件的静态 `userId/accountId`。`leeclaw-openviking` 使用 OpenClaw 官方 hooks + Session Runtime：
-
-- `before_prompt_build`：按 session creator profile 召回 Memory；
-- `agent_end`：按同一 profile 捕获最新 turn；
-- `before_reset`：提交 pending session；
-- OpenClaw 原 Context/Compaction 不被替换。
-
-## Knowledge 安全边界
-
-WeKnora Adapter 只发送：
-
-```text
-X-API-Key
-X-Tenant-ID
-X-External-User-ID=<OpenClaw profileId>
-```
-
-用户 Bearer 和客户端声明的 external user 已从 v0.6 路径移除。WeKnora service API key 仍应按 capability / `knowledge_base_ids` 最小授权，并启用 API Principal `direct_header + require_direct_header`。
-
-## 本体
-
-v0.4 起的 Ontology Registry 继续保留：immutable version、publish、active/pinned、rollback、audit、KB binding。OpenClaw Knowledge 图谱页统一查看 Entity Graph / Ontology Graph，底层仍不混库。
 
 ## 验证
 
 ```bash
-./scripts/verify-v0.6.sh
+./scripts/verify-v0.7.sh
+
+./scripts/check-v0.7-upstreams.sh \
+  ../upstream/openclaw \
+  ../upstream/weknora \
+  ../upstream/openviking
 ```
 
-上游契约：
+## 当前生产边界
 
-```bash
-./scripts/check-v0.6-upstreams.sh <openclaw> <weknora> <openviking>
-```
+Workspace Registry、Workspace selection、LeeClaw audit、Ontology FSRegistry 当前都以单 Gateway/单实例为基线。多实例生产部署应替换为共享数据库/集中审计后端；接口 Contract 不需要变化。
+
+Control UI 文件上传当前经过 Gateway JSON RPC 转 base64，默认 10 MiB、硬上限 50 MiB。大文件后续应采用受认证的流式上传路由，不应继续提高 JSON RPC 限额。

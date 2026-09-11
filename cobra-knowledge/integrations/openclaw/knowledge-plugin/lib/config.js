@@ -1,3 +1,5 @@
+import path from "node:path";
+
 function cleanUrl(value) {
   return String(value ?? "").trim().replace(/\/+$/u, "");
 }
@@ -11,16 +13,18 @@ function requiredString(value, name) {
 export function resolveKnowledgeConfig(raw = {}) {
   const weknoraBaseUrl = cleanUrl(raw.weknoraBaseUrl ?? process.env.WEKNORA_BASE_URL);
   if (!weknoraBaseUrl) throw new Error("leeclaw-knowledge: weknoraBaseUrl is required");
-
-  const requestTimeoutMs = Number(raw.requestTimeoutMs ?? process.env.LEECLAW_KNOWLEDGE_TIMEOUT_MS ?? 15000);
+  const workspaceRegistryPath = requiredString(raw.workspaceRegistryPath ?? process.env.LEECLAW_WORKSPACE_REGISTRY, "workspaceRegistryPath");
+  const workspaceStatePath = String(raw.workspaceStatePath ?? process.env.LEECLAW_WORKSPACE_STATE ?? "").trim() || undefined;
+  const defaultStatePath = workspaceStatePath ?? `${workspaceRegistryPath}.state.json`;
+  const requestTimeoutMs = Number(raw.requestTimeoutMs ?? process.env.LEECLAW_KNOWLEDGE_TIMEOUT_MS ?? 30000);
+  const uploadMaxBytes = Number(raw.uploadMaxBytes ?? process.env.LEECLAW_UPLOAD_MAX_BYTES ?? 10 * 1024 * 1024);
   return {
     weknoraBaseUrl,
     graphApiBaseUrl: cleanUrl(raw.graphApiBaseUrl ?? process.env.LEECLAW_GRAPH_API_BASE_URL),
-    weknoraApiKey: requiredString(raw.weknoraApiKey ?? process.env.WEKNORA_API_KEY, "weknoraApiKey"),
-    weknoraTenantId: requiredString(raw.weknoraTenantId ?? process.env.WEKNORA_TENANT_ID, "weknoraTenantId"),
-    workspaceId: requiredString(raw.workspaceId ?? process.env.LEECLAW_WORKSPACE_ID, "workspaceId"),
-    requestTimeoutMs: Number.isFinite(requestTimeoutMs)
-      ? Math.max(1000, Math.min(requestTimeoutMs, 60000))
-      : 15000,
+    workspaceRegistryPath,
+    workspaceStatePath,
+    auditLogPath: requiredString(raw.auditLogPath ?? process.env.LEECLAW_AUDIT_LOG ?? path.join(path.dirname(defaultStatePath), "knowledge-audit.jsonl"), "auditLogPath"),
+    requestTimeoutMs: Number.isFinite(requestTimeoutMs) ? Math.max(1000, Math.min(requestTimeoutMs, 120000)) : 30000,
+    uploadMaxBytes: Number.isFinite(uploadMaxBytes) ? Math.max(1024, Math.min(uploadMaxBytes, 50 * 1024 * 1024)) : 10 * 1024 * 1024,
   };
 }

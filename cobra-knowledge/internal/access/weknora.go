@@ -12,7 +12,7 @@ import (
 
 // WeKnoraAccessChecker delegates authorization to WeKnora instead of duplicating its RBAC.
 // Only the LeeClaw service credential plus server-issued workspace/user principal are forwarded.
-// User-facing WeKnora bearer identities are intentionally not accepted in v0.6.
+// User-facing WeKnora bearer identities are intentionally not accepted in v0.7.
 type WeKnoraAccessChecker struct {
 	BaseURL string
 	Client  *http.Client

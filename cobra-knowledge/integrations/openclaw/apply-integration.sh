@@ -52,8 +52,8 @@ copy_plugin() {
 copy_plugin knowledge
 copy_plugin openviking
 
-cat > "$OUTPUT/LEECLAW-V0.6-DERIVED.txt" <<'TXT'
-This is a derived OpenClaw build tree assembled by LeeClaw v0.6.
+cat > "$OUTPUT/LEECLAW-V0.7-DERIVED.txt" <<'TXT'
+This is a derived OpenClaw build tree assembled by LeeClaw v0.7.
 No upstream OpenClaw file was modified in place.
 Added workspace extensions:
 - extensions/leeclaw-knowledge
