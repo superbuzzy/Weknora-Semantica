@@ -1,6 +1,6 @@
 {
   "name": "openclaw-plugin-leeclaw-openviking",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "OpenClaw-native Memory/Skills backed by OpenViking with durable-profile identity and identity-aware memory hooks.",
@@ -33,5 +33,8 @@
     "compat": {
       "pluginApi": ">=2026.9.3"
     }
+  },
+  "dependencies": {
+    "@leeclaw/workspace-core": "workspace:*"
   }
 }

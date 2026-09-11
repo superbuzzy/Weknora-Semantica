@@ -1,64 +1,113 @@
-# LeeClaw v0.6 身份与权限模型
+# LeeClaw v0.7 身份、Workspace 与授权模型
 
-## 当前状态
+## 1. 唯一人类账号
 
-v0.6 已完成单一人类账号源收口：**用户只由 OpenClaw 认证，唯一持久用户 ID 为 `authenticatedUserProfile.profileId`。**
+LeeClaw 只维护一套人类账号：OpenClaw durable User Profile。
 
 ```text
-OpenClaw Profile
-      │
-      ├─> WeKnora External Principal
-      └─> OpenViking Trusted Principal
+OpenClaw authenticatedUserProfile.profileId
+                  ↓
+            global user id
 ```
 
-WeKnora/OpenViking 不再要求用户单独登录；其 API Key/root key 属于服务间凭证，不代表人类账号。
+WeKnora/OpenViking 不要求用户再次登录。
 
-## 权限分层
+## 2. v0.7 对 v0.6 的修正
 
-| 层级 | 权威 | 说明 |
+v0.6 已解决“用户身份不能由浏览器覆盖”，但 Workspace 仍是静态服务配置。v0.7 直接删除静态 Workspace/Tenant/Account 路径，替换为服务端 Workspace Registry。
+
+另外，WeKnora API Principal 的 External User 适合标识调用主体，但共享 service key 下它不等价于 OpenClaw 多用户 RBAC。v0.7 因此不再把 WeKnora 用户/成员体系当 LeeClaw 人类账号体系。
+
+## 3. Workspace 是 LeeClaw 的授权域
+
+Workspace Registry 保存：
+
+```text
+logical workspace
+├─ members: OpenClaw profileId + role
+├─ WeKnora tenant mapping + API key env reference
+└─ OpenViking account mapping
+```
+
+浏览器只可以提交逻辑 `workspaceId` 作为切换请求。服务端先验证当前 profile membership；未经验证的 logical id 永远不能成为下游 Tenant/Account。
+
+## 4. 权限交集
+
+一次写操作最终需要：
+
+```text
+OpenClaw platform scope
+AND Workspace role
+AND downstream machine-principal capability
+```
+
+典型矩阵：
+
+| 操作 | OpenClaw Scope | Workspace Role |
 |---|---|---|
-| 人类账号/登录 | OpenClaw | 唯一账号源 |
-| 平台读写 scope | OpenClaw | `operator.read/write/...` |
-| Knowledge 服务边界 | WeKnora | Tenant + API key capability + KB scope |
-| Memory/Skill 隔离 | OpenViking | Account + User + ACL |
-| Ontology 治理 | Knowledge Core | publish/rollback/binding/admin token |
+| 查看 KB/Memory/Skill | operator.read | viewer+ |
+| 新建/修改 KB 内容 | operator.write | editor+ |
+| 删除 KB / 管理共享 | operator.admin | admin+ |
+| 增删 Workspace 成员 | operator.admin | owner |
 
-## 不能由客户端声明的字段
+## 5. WeKnora Principal
 
-以下均为 server-owned：
-
-```text
-userId
-externalUserId
-tenantId
-accountId
-```
-
-OpenClaw browser 只发业务参数。身份由 Gateway Client / Session Store 解析，作用域由 plugin config/未来 Workspace Resolver 注入。
-
-## Knowledge
+服务端根据已验证 Workspace 生成：
 
 ```text
-profileId -> X-External-User-ID
-configured tenant -> X-Tenant-ID
-service key -> X-API-Key
+X-API-Key          = env[workspace.weknora.apiKeyEnv]
+X-Tenant-ID        = workspace.weknora.tenantId
+X-External-User-ID = OpenClaw profileId
 ```
 
-不转发人类 WeKnora Bearer。WeKnora 应启用 external principal direct-header 且 `require_direct_header=true`，并让服务 key 只拥有 LeeClaw 所需能力。
+用户 Bearer、浏览器 external user、浏览器 tenant override 都不属于 v0.7 活跃路径。
 
-注意：v0.6 的 WeKnora 服务授权粒度主要由 API key capability / `knowledge_base_ids` 控制；OpenClaw operator scope 控制平台级读写。用户身份会被 WeKnora作为 external principal记录/隔离，但 v0.6 没有伪造一套 WeKnora Web User 登录会话。
-
-## Memory / Skill
-
-管理面：Gateway 的 durable profile 直接映射 `X-OpenViking-User`。
-
-运行面：从 OpenClaw Session 的 `createdActor(source=profile)` 恢复 owner profile。这样后台 Agent turn 不需要信任浏览器传来的 user id。
+## 6. OpenViking Principal
 
 ```text
-OpenViking Account = workspaceId
-OpenViking User    = profileId
+X-OpenViking-Account = workspace.openviking.accountId
+X-OpenViking-User    = OpenClaw profileId
 ```
 
-## 多 Workspace
+OpenViking 解析 Workspace 不需要 WeKnora credential；Knowledge 和 Memory/Skill 两条引擎边界独立。
 
-v0.6 先固定 workspace/tenant 映射。未来允许切 Workspace 时，必须增加 server-side resolver + membership check，浏览器只能请求逻辑 workspace，不能直接提交 WeKnora tenant 或 OpenViking account ID。
+## 7. Workspace 成员治理
+
+成员对象只保存：
+
+```json
+{
+  "profileId": "openclaw-profile-id",
+  "role": "editor",
+  "displayName": "optional cache"
+}
+```
+
+成员页面从 OpenClaw `users.list` 获取 Profile 信息。owner 可以在拥有 `operator.admin` 的情况下增加、修改或移除成员；系统阻止删除/降级最后一个 owner。
+
+## 8. Current Workspace
+
+当前选择按 `profileId -> workspaceId` 服务端持久化。Knowledge 页面、Memory/Skill 页面和 Chat Memory Runtime 都读取同一 selection state。
+
+因此：
+
+```text
+切换 Workspace
+  → Knowledge Tenant 变更
+  → OpenViking Account 变更
+  → 后续 Chat Memory scope 变更
+```
+
+不会出现页面已切换、Agent 仍读旧空间 Memory 的分叉。
+
+## 9. 生产扩展
+
+v0.7 Registry/selection 使用单 Gateway 文件存储。HA 部署应实现相同 Contract 的数据库后端，并增加：
+
+- 乐观锁/事务；
+- Workspace 变更审计；
+- 缓存失效；
+- Secret Manager 引用；
+- 集中授权事件与告警。
+
+升级时替换存储实现，不改变 browser 参数或下游 principal contract。

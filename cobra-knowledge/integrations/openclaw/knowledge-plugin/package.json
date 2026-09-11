@@ -1,6 +1,6 @@
 {
   "name": "openclaw-plugin-leeclaw-knowledge",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "OpenClaw-native knowledge workspace backed by WeKnora using the durable OpenClaw user profile as the only user identity.",
@@ -33,5 +33,8 @@
     "compat": {
       "pluginApi": ">=2026.9.3"
     }
+  },
+  "dependencies": {
+    "@leeclaw/workspace-core": "workspace:*"
   }
 }

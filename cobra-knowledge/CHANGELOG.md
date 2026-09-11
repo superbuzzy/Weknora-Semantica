@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0
+
+- Replaced static single-workspace configuration with a server-side Workspace Registry bound to OpenClaw durable profile IDs.
+- Added workspace switching, viewer/editor/admin/owner role enforcement, member mapping, last-owner protection and shared selection state across Knowledge/Memory/Skill.
+- Expanded OpenClaw-native Knowledge management to KB CRUD, document ingest/parse control, Wiki, FAQ, tags, hybrid search and organization sharing mutations.
+- Replaced the unreachable WeKnora JWT-only KB activity call with a LeeClaw workspace-scoped audit log that excludes sensitive request payloads.
+- Decoupled OpenViking workspace resolution from WeKnora credentials; Memory/Skill now require only the validated workspace account mapping and OpenClaw profile.
+- Preserved Entity/Ontology GraphView, Ontology Registry governance and zero upstream-source modification.
+- Added v0.7 compatibility, identity, workspace, audit and adapter regression gates.
+
 ## v0.6.0
 
 - OpenClaw `authenticatedUserProfile.profileId` 成为 LeeClaw 唯一人类用户 ID。

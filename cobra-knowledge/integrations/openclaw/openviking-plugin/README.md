@@ -1,27 +1,36 @@
-# leeclaw-openviking v0.6
+# leeclaw-openviking v0.7
 
-OpenClaw 原生 Memory / Skills Plugin。OpenViking 是 Memory、Session、Experience、Skill 的 Source of Truth。
+OpenClaw 原生 Memory + Skills Feature Plugin，以及 identity-aware Memory Runtime。
 
-## Identity
-
-管理面唯一用户：`authenticatedUserProfile.profileId`。
+## Principal
 
 ```text
-X-OpenViking-Account = workspaceId
+OpenClaw durable profileId
+       +
+validated current Workspace
+       ↓
 X-OpenViking-User    = profileId
+X-OpenViking-Account = workspace.openviking.accountId
 ```
 
-旧的静态 `accountId/userId/forwardAuthenticatedUser` 配置已删除。
+插件不接受浏览器 `userId/accountId`，也不配置静态 user/account。
 
-## Identity-aware Memory Runtime
+## Workspace
 
-多用户 LeeClaw 不使用 OpenViking 官方插件静态 user/account 的 context-engine 配置。v0.6 用 OpenClaw 官方 hooks 与 Session Runtime：
+Memory/Skill 页面和 Chat Memory Runtime 读取与 Knowledge 相同的 Workspace Registry / selection state。切换 Workspace 后，后续 Memory recall/capture 和 Skill 查询自动切到对应 OpenViking Account。
 
-- `before_prompt_build` -> 按 session creator profile 召回 Memory；
-- `agent_end` -> 写入最新 user/assistant turn；
-- `before_reset` -> commit pending memory；
-- session owner 只能来自 `createdActor(type=human, source=profile)`。
+OpenViking Adapter 不读取 WeKnora credential，两条 Engine 保持解耦。
 
-无法解析 durable profile 时，不查询、不写入 Memory，避免跨用户污染；Agent 本身继续运行。
+## Runtime Hooks
 
-OpenClaw 自己的 context/compaction 机制保持不变。
+```text
+before_prompt_build → recall
+agent_end           → capture + threshold commit
+before_reset        → commit pending
+```
+
+Memory Context 明确标记为非权威企业事实、非执行指令。
+
+## Skill
+
+v0.7 支持 Skill list / semantic find / read。OpenViking 仍是唯一 Skill Source of Truth；Agent Runtime 的动态 Skill Loader 属于后续版本。

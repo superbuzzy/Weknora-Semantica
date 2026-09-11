@@ -1,20 +1,44 @@
 {
   "id": "leeclaw-knowledge",
   "name": "LeeClaw Knowledge",
-  "description": "OpenClaw-native knowledge management backed by WeKnora, with entity/ontology graph views.",
-  "version": "0.6.0",
-  "activation": { "onStartup": true },
+  "description": "OpenClaw-native multi-workspace knowledge management backed by WeKnora, with entity/ontology graph views.",
+  "version": "0.7.0",
+  "activation": {
+    "onStartup": true
+  },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "weknoraBaseUrl": { "type": "string" },
-      "weknoraApiKey": { "type": "string" },
-      "weknoraTenantId": { "type": ["string", "number"] },
-      "workspaceId": { "type": "string" },
-      "graphApiBaseUrl": { "type": "string" },
-      "requestTimeoutMs": { "type": "number", "minimum": 1000, "maximum": 60000 }
+      "weknoraBaseUrl": {
+        "type": "string"
+      },
+      "graphApiBaseUrl": {
+        "type": "string"
+      },
+      "workspaceRegistryPath": {
+        "type": "string"
+      },
+      "workspaceStatePath": {
+        "type": "string"
+      },
+      "uploadMaxBytes": {
+        "type": "number",
+        "minimum": 1024,
+        "maximum": 52428800
+      },
+      "requestTimeoutMs": {
+        "type": "number",
+        "minimum": 1000,
+        "maximum": 120000
+      },
+      "auditLogPath": {
+        "type": "string"
+      }
     },
-    "required": ["weknoraBaseUrl", "weknoraApiKey", "weknoraTenantId", "workspaceId"]
+    "required": [
+      "weknoraBaseUrl",
+      "workspaceRegistryPath"
+    ]
   }
 }

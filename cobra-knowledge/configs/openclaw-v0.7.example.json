@@ -5,10 +5,11 @@
         "enabled": true,
         "config": {
           "weknoraBaseUrl": "http://weknora:8080",
-          "weknoraApiKey": "${WEKNORA_API_KEY}",
-          "weknoraTenantId": "${WEKNORA_TENANT_ID}",
-          "workspaceId": "${LEECLAW_WORKSPACE_ID}",
-          "graphApiBaseUrl": "http://leeclaw-graph-api:8090"
+          "graphApiBaseUrl": "http://leeclaw-graph-api:8090",
+          "workspaceRegistryPath": "/etc/leeclaw/workspaces.json",
+          "workspaceStatePath": "/var/lib/leeclaw/workspaces.state.json",
+          "uploadMaxBytes": 10485760,
+          "auditLogPath": "/var/lib/leeclaw/knowledge-audit.jsonl"
         }
       },
       "leeclaw-openviking": {
@@ -16,7 +17,8 @@
         "config": {
           "baseUrl": "http://openviking:1933",
           "apiKey": "${OPENVIKING_ROOT_API_KEY}",
-          "workspaceId": "${LEECLAW_WORKSPACE_ID}",
+          "workspaceRegistryPath": "/etc/leeclaw/workspaces.json",
+          "workspaceStatePath": "/var/lib/leeclaw/workspaces.state.json",
           "memoryRuntimeEnabled": true,
           "memoryRecallLimit": 8,
           "memoryMaxRecallChars": 12000,
