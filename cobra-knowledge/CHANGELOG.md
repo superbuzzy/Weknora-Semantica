@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.9.0
+
+- Replaced the v0.8 retrieval plan with Planner v2 contracts that distinguish `required_sources` from `supporting_sources`, carry freshness requirements and expose blocking ontology-federation issues.
+- Added request-scoped multi-Knowledge-Base ontology federation with namespace-aware concept alignment and visible concept-sense conflicts instead of silent graph merging.
+- Added an Agent Runtime Entity Retriever over the existing WeKnora Neo4j graph adapter, including entity properties, relation paths and chunk-level provenance.
+- Added transport-neutral `BusinessQuerySource` and `BusinessDataRetriever` contracts plus a generic HTTP business-gateway adapter; business URLs, SQL and authentication remain outside the Planner/Core.
+- Expanded `EvidenceRef` to Evidence Contract v2 with source type/id, entity id, value/unit, effective time, confidence and provenance while retaining existing WeKnora-compatible fields.
+- Replaced the old “any gap means incomplete” behavior with a required-source Completeness Gate: missing required sources, unresolved fact conflicts and relevant ontology-federation conflicts are blocking; supporting-source gaps remain diagnostic.
+- Added per-source execution status to Context Pack and preserved the rule that RAG fallback cannot substitute for a missing required live/structured source.
+- Wired Entity Retriever into LeeClaw Core Runtime and made Business Retriever optional through `LEECLAW_BUSINESS_GATEWAY_URL` / `LEECLAW_BUSINESS_GATEWAY_TOKEN`.
+- Replaced active v0.8 config/compatibility/verification files with v0.9 equivalents while retaining historical release documents.
+- Kept OpenClaw, WeKnora and OpenViking upstream source trees unmodified.
+
 ## v0.8.0
 
 - Added OpenClaw Agent Knowledge tools `leeclaw_context_retrieve` and `leeclaw_context_get_evidence`.
@@ -82,7 +95,6 @@
 - Delegated graph-view authorization to WeKnora RBAC using the caller's Authorization and tenant headers.
 - Kept WeKnora Neo4j schema read-only and unchanged.
 - Kept Semantica as a research reference only; no runtime dependency.
-
 
 ## v0.2.0
 
