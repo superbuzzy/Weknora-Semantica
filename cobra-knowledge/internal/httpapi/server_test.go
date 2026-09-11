@@ -43,7 +43,7 @@ func TestGraphSwitchAPI(t *testing.T) {
 
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub#] == sub {
+		if s[i:i+len(sub)] == sub {
 			return true
 		}
 	}
