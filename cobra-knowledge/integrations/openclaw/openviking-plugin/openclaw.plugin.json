@@ -1,9 +1,9 @@
 {
   "id": "leeclaw-openviking",
   "name": "LeeClaw Memory & Skills",
-  "description": "OpenClaw-native multi-workspace Memory and Skill management backed by OpenViking with durable-profile identity.",
-  "version": "0.7.0",
-  "activation": { "onStartup": true },
+  "description": "OpenClaw-native multi-workspace Memory plus dynamic Skill Runtime backed by OpenViking with durable-profile identity.",
+  "version": "0.8.0",
+  "activation": { "onStartup": true, "onCapabilities": ["hook"] },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -15,6 +15,10 @@
       "memoryRuntimeEnabled": { "type": "boolean" },
       "memoryRecallLimit": { "type": "number", "minimum": 1, "maximum": 50 },
       "memoryMaxRecallChars": { "type": "number", "minimum": 1000, "maximum": 50000 },
+      "skillRuntimeEnabled": { "type": "boolean" },
+      "skillResolveLimit": { "type": "number", "minimum": 1, "maximum": 20 },
+      "skillScoreThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
+      "skillMaxContentChars": { "type": "number", "minimum": 2000, "maximum": 50000 },
       "commitPendingTokens": { "type": "number", "minimum": 0 },
       "commitKeepRecentCount": { "type": "number", "minimum": 0 },
       "requestTimeoutMs": { "type": "number", "minimum": 1000, "maximum": 60000 }

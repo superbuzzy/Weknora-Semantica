@@ -15,6 +15,7 @@ import (
 	"cobraknowledge.local/cobra-knowledge/internal/graphview"
 	"cobraknowledge.local/cobra-knowledge/internal/model"
 	"cobraknowledge.local/cobra-knowledge/internal/ontology"
+	"cobraknowledge.local/cobra-knowledge/internal/runtimecontext"
 )
 
 type AccessChecker interface {
@@ -22,6 +23,8 @@ type AccessChecker interface {
 }
 
 type Server struct {
+	RuntimeContext     *runtimecontext.Service
+	RuntimeToken       string
 	EntitySource       graphview.EntitySource
 	OntologySource     graphview.OntologySource
 	AccessChecker      AccessChecker
@@ -33,7 +36,9 @@ type Server struct {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
-	// Stable WeKnora-facing API. v0.6 keeps this route unchanged.
+	mux.HandleFunc("POST /api/v1/runtime/context/retrieve", s.runtimeRetrieve)
+	mux.HandleFunc("POST /api/v1/runtime/context/evidence", s.runtimeEvidence)
+	// Stable Knowledge graph API retained inside the LeeClaw Core API in v0.8.
 	mux.HandleFunc("GET /api/v1/knowledge-bases/{kbID}/graph", s.graph)
 
 	// CobraKnowledge governance API. These routes are not called by the WeKnora overlay.
@@ -50,7 +55,87 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "version": "0.6.0"})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "version": "0.8.0"})
+}
+
+func (s *Server) runtimeRetrieve(w http.ResponseWriter, r *http.Request) {
+	if !s.requireRuntime(w, r) {
+		return
+	}
+	if s.RuntimeContext == nil {
+		writeError(w, http.StatusServiceUnavailable, "runtime context service is not configured")
+		return
+	}
+	var body runtimecontext.RetrieveRequest
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	pack, err := s.RuntimeContext.Retrieve(ctx, runtimePrincipalFrom(r), body)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, pack)
+}
+
+func (s *Server) runtimeEvidence(w http.ResponseWriter, r *http.Request) {
+	if !s.requireRuntime(w, r) {
+		return
+	}
+	if s.RuntimeContext == nil {
+		writeError(w, http.StatusServiceUnavailable, "runtime context service is not configured")
+		return
+	}
+	var body runtimecontext.EvidenceRequest
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+	evidence, err := s.RuntimeContext.GetEvidence(ctx, runtimePrincipalFrom(r), body)
+	if err != nil {
+		if errors.Is(err, runtimecontext.ErrEvidenceOutsideScope) {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, evidence)
+}
+
+func (s *Server) requireRuntime(w http.ResponseWriter, r *http.Request) bool {
+	expected := strings.TrimSpace(s.RuntimeToken)
+	if expected == "" || s.RuntimeContext == nil {
+		writeError(w, http.StatusServiceUnavailable, "runtime context API is disabled")
+		return false
+	}
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	const prefix = "Bearer "
+	if !strings.HasPrefix(auth, prefix) {
+		writeError(w, http.StatusUnauthorized, "runtime authentication required")
+		return false
+	}
+	actual := strings.TrimSpace(strings.TrimPrefix(auth, prefix))
+	if len(actual) != len(expected) || subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) != 1 {
+		writeError(w, http.StatusUnauthorized, "runtime authentication required")
+		return false
+	}
+	return true
+}
+
+func runtimePrincipalFrom(r *http.Request) runtimecontext.Principal {
+	return runtimecontext.Principal{
+		WorkspaceID:    strings.TrimSpace(r.Header.Get("X-LeeClaw-Workspace-ID")),
+		UserID:         strings.TrimSpace(r.Header.Get("X-LeeClaw-User-ID")),
+		TenantID:       strings.TrimSpace(r.Header.Get("X-LeeClaw-WeKnora-Tenant-ID")),
+		WeKnoraAPIKey:  strings.TrimSpace(r.Header.Get("X-LeeClaw-WeKnora-API-Key")),
+		WeKnoraBaseURL: strings.TrimSpace(r.Header.Get("X-LeeClaw-WeKnora-Base-URL")),
+	}
 }
 
 func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
@@ -306,7 +391,7 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 		if origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Tenant-ID, X-External-User-ID, X-Cobra-Admin-Token, X-Cobra-Actor")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {

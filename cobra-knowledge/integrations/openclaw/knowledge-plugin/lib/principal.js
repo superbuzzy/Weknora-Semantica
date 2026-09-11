@@ -11,9 +11,7 @@ function requiredEnvironment(name) {
   return value;
 }
 
-export function knowledgePrincipal(client, workspaceRegistry, requestedWorkspaceId, minimumRole = "viewer") {
-  const userId = requireDurableProfileId(client);
-  const workspace = workspaceRegistry.requireRole(userId, requestedWorkspaceId, minimumRole);
+function fromWorkspace(userId, workspace) {
   return Object.freeze({
     issuedBy: "openclaw",
     userId,
@@ -24,6 +22,28 @@ export function knowledgePrincipal(client, workspaceRegistry, requestedWorkspace
     tenantId: workspace.weknoraTenantId,
     weknoraApiKey: requiredEnvironment(workspace.weknoraApiKeyEnv),
     weknoraBaseUrl: workspace.weknoraBaseUrl,
+    knowledgeBaseIds: Object.freeze([...(workspace.weknoraKnowledgeBaseIds ?? [])]),
     openvikingAccountId: workspace.openvikingAccountId,
   });
+}
+
+export function knowledgePrincipal(client, workspaceRegistry, requestedWorkspaceId, minimumRole = "viewer") {
+  const userId = requireDurableProfileId(client);
+  return fromWorkspace(userId, workspaceRegistry.requireRole(userId, requestedWorkspaceId, minimumRole));
+}
+
+export function sessionKnowledgePrincipal(api, workspaceRegistry, sessionKey, sessionId) {
+  const workspace = workspaceRegistry.resolveSession(api, sessionKey, sessionId);
+  if (!workspace) return null;
+  return fromWorkspace(workspace.profileId, workspace);
+}
+
+export function resolveKnowledgeBaseScope(principal, requestedKnowledgeBaseId) {
+  const requested = String(requestedKnowledgeBaseId ?? "").trim();
+  const allowed = Array.isArray(principal?.knowledgeBaseIds) ? principal.knowledgeBaseIds : [];
+  if (!requested) return allowed;
+  if (allowed.length > 0 && !allowed.includes(requested)) {
+    throw new Error("leeclaw-knowledge: knowledge base is outside the active workspace scope");
+  }
+  return [requested];
 }

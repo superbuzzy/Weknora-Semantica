@@ -11,6 +11,7 @@ import (
 
 	"cobraknowledge.local/cobra-knowledge/internal/model"
 	"cobraknowledge.local/cobra-knowledge/internal/ontology"
+	"cobraknowledge.local/cobra-knowledge/internal/runtimecontext"
 )
 
 type fakeEntity struct{}
@@ -42,7 +43,7 @@ func TestGraphSwitchAPI(t *testing.T) {
 
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
+		if s[i:i+len(sub#] == sub {
 			return true
 		}
 	}
@@ -105,5 +106,23 @@ func TestRegistryAPIRequiresSeparateAdminToken(t *testing.T) {
 	s.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRuntimeContextAPIRequiresInternalBearerAndDoesNotCORSExposeTrustedHeaders(t *testing.T) {
+	s := &Server{RuntimeContext: &runtimecontext.Service{}, RuntimeToken: "runtime-secret", AllowedOrigin: "https://openclaw.example"}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/runtime/context/retrieve", bytes.NewReader([]byte(`{"query":"q"}`)))
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodOptions, "/api/v1/runtime/context/retrieve", nil)
+	req.Header.Set("Origin", "https://openclaw.example")
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type" {
+		t.Fatalf("trusted headers exposed to browser CORS: %q", got)
 	}
 }

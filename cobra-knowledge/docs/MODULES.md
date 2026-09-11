@@ -1,59 +1,60 @@
-# v0.7 模块与代码职责
+# v0.8 模块与代码职责
 
 ## OpenClaw Integration
 
-### `integrations/openclaw/knowledge-plugin`
+### `integrations/openclaw/workspace-core/`
+唯一 Workspace membership / role / selection / downstream mapping 实现。v0.8 额外提供 Session Creator 解析和可选 Knowledge Base Scope。
 
-OpenClaw 原生 Knowledge / Workspaces 插件。
+### `integrations/openclaw/knowledge-plugin/`
+OpenClaw 原生 Knowledge 管理与 Agent Knowledge Runtime。
 
-核心子模块：
+关键文件：
 
-- `browser/`：只调用 `leeclaw.*` Gateway Contract；
-- `integrations/openclaw/workspace-core`：Workspace membership / role / selection / downstream mapping 的唯一实现；
-- `lib/principal.js`：OpenClaw profile → Knowledge Principal；
-- `lib/weknora-client.js`：唯一 WeKnora HTTP Adapter；
-- `lib/audit-log.js`：Workspace-scoped LeeClaw operation audit；
-- `index.js`：Gateway RPC、OpenClaw scope、Workspace role、审计编排。
+- `index.js`：Control UI / Gateway Method / Agent Tool 注册；
+- `lib/principal.js`：durable profile + Workspace → Knowledge Principal；
+- `lib/weknora-client.js`：WeKnora 管理与 Graph Adapter；
+- `lib/context-runtime-client.js`：LeeClaw Core Runtime 内部服务客户端；
+- `lib/agent-tools.js`：`leeclaw_context_retrieve` / `leeclaw_context_get_evidence`；
+- `lib/audit-log.js`：Workspace-scoped audit。
 
-### `integrations/openclaw/openviking-plugin`
+### `integrations/openclaw/openviking-plugin/`
+OpenClaw 原生 Memory + Skill Runtime。
 
-OpenClaw 原生 Memory / Skill 插件。
+关键文件：
 
-- `lib/principal.js`：OpenClaw profile/session owner → OpenViking Principal；
-- 通过 `@leeclaw/workspace-core` 复用同一 Workspace Contract，不维护第二份 Resolver；
 - `lib/client.js`：OpenViking HTTP Adapter；
-- `lib/memory-runtime.js`：`before_prompt_build / agent_end / before_reset` Memory 生命周期。
+- `lib/principal.js`：Session / Profile → OpenViking Principal；
+- `lib/memory-runtime.js`：Memory recall / capture；
+- `lib/skill-runtime.js`：Skill find / load / allowed-tools 安全映射；
+- `lib/agent-runtime.js`：唯一 `before_prompt_build` 组合入口。
 
-OpenViking 侧不读取 WeKnora API Key。
+## LeeClaw Core
 
-## Knowledge Core
+### `internal/runtimecontext/`
+v0.8 新增的在线 Context Service。按请求创建 Workspace-scoped WeKnora Retriever，并复用已有 Planner / Arbiter / Assembler。
 
-### `internal/ontology`
+### `internal/retrieval/`
+Semantic Catalog、Planner、来源策略、Arbiter。
 
-Ontology Registry、不可变版本、publish/activate、KB binding、rollback、audit。
+### `internal/context/`
+Retriever 编排和 Context Pack。
 
-### `internal/graphview`
+### `internal/ontology/`
+Ontology Registry、版本、发布、active/pinned、KB Binding。
 
-把 WeKnora Entity Graph 与 Ontology Registry 投影成统一 `GraphView`。
+### `internal/httpapi/`
+Core API：Graph、Ontology Registry、Runtime Context。
 
-### `internal/access`
-
-Graph API 对 WeKnora 的服务 Principal 授权委托。只转发服务 API Key、Tenant 和 OpenClaw External Principal，不转发人类 Bearer。
-
-### `internal/retrieval` / `internal/context`
-
-Planner / retrieval / context assembly 基础能力。后续 Agent Runtime 深度接入在此扩展，不应塞进 Knowledge 管理 UI。
+### `internal/adapters/weknora/`
+WeKnora Search / Chunk / Graph Adapter。Runtime 请求通过 API Key + Tenant + External User Principal。
 
 ## Compatibility
 
-### `compatibility/upstreams-v0.7.json`
+### `compatibility/upstreams-v0.8.json`
+记录 v0.8 三个 pinned upstream 与必需 Runtime Contract。
 
-记录 v0.7 验证过的三个 upstream 基线和关键契约。
+### `scripts/check-v0.8-upstreams.sh`
+检查 OpenClaw Tool/Hook Authority、OpenViking Skill Contract、WeKnora Principal Contract。
 
-### `scripts/check-v0.7-upstreams.sh`
-
-检查 OpenClaw Plugin/Profile/Session、WeKnora Knowledge API/External Principal、OpenViking trusted principal/Skill/Session 契约。
-
-### `scripts/verify-v0.7.sh`
-
-跑 Go/JS/Plugin Contract/身份边界/浏览器泄漏/静态 Workspace 回归等本地门禁。
+### `scripts/verify-v0.8.sh`
+本地发布门禁：Go、JS、Runtime、权限、不变量、旧版本活跃入口清理。

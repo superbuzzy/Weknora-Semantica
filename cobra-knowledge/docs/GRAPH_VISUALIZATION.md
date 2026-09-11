@@ -1,65 +1,78 @@
-# v0.7 Knowledge 图谱：实体图 / 本体图
+# v0.8 Knowledge 图谱：实体图 / 本体图
 
-v0.7 保持一个稳定原则：**产品统一展示，数据生命周期不合并。**
+v0.8 保持一个稳定原则：**产品统一展示，数据生命周期不合并。**
+
+## 1. 三类知识结构
 
 ```text
-OpenClaw Knowledge
-        ↓
-       图谱
-   ┌────┴────┐
-   ▼         ▼
-实体图      本体图
-   │         │
-WeKnora   Ontology Registry
+Wiki / RAG
+  → WeKnora
+
+Entity Graph
+  → WeKnora GraphRAG / Neo4j
+
+Ontology Graph
+  → LeeClaw Ontology Registry
 ```
 
-## 1. 稳定 GraphView
+## 2. 统一展示契约
 
-OpenClaw Knowledge UI 只消费：
+实体图和本体图继续统一投影为 `GraphView`：
 
-```http
-GET /api/v1/knowledge-bases/{kbID}/graph?view=entity|ontology
+```text
+nodes[]
+edges[]
+meta.view = entity | ontology
 ```
 
-统一返回节点、边和 `meta`。前端不需要知道实体图来自 Neo4j、本体图来自 Registry。
+OpenClaw Knowledge 页面只依赖稳定 GraphView，不依赖 Neo4j 或 Registry 的内部结构。
 
-## 2. Entity Graph
+## 3. v0.8 Core API
 
-Source of Truth：WeKnora GraphRAG / Neo4j。
+v0.8 已直接用 `coreApiBaseUrl` 替换旧的 `graphApiBaseUrl`。图谱接口仍保持：
 
-它表示运行中的事实实体、属性和关系，随知识内容更新。
+```text
+GET /api/v1/knowledge-bases/{kbID}/graph?view=entity
+GET /api/v1/knowledge-bases/{kbID}/graph?view=ontology
+```
 
-## 3. Ontology Graph
+同一个 Core API 同时新增：
 
-Source of Truth：LeeClaw Ontology Registry。
+```text
+POST /api/v1/runtime/context/retrieve
+POST /api/v1/runtime/context/evidence
+```
 
-它表示 Class / Property / Relation / Constraint / Domain / Range 等语义治理资产，并保持：
+因此 Graph 是 Knowledge Core 的一个视图能力，不再被单独抽象成一个产品服务。
+
+## 4. 本体图生命周期
+
+本体仍按：
 
 ```text
 Candidate
- → immutable version
- → publish
- → active / pinned
- → KB binding
- → rollback / audit
+  → Immutable Version
+  → Publish
+  → Active / Pinned
+  → KB Binding
+  → Rollback / Audit
 ```
 
-## 4. 授权
+本体图不会因为 UI 与实体图放在同一页面就与 WeKnora Entity Graph 合库。
 
-Graph API 不接受或转发 LeeClaw 用户的 WeKnora Bearer。Knowledge Plugin 已经通过服务端 Workspace Resolver 得到：
+## 5. Runtime 关系
+
+Ontology Graph 在 v0.8 不只用于展示，还会参与：
 
 ```text
-X-API-Key
-X-Tenant-ID
-X-External-User-ID = OpenClaw profileId
+KB Binding
+  → Ontology
+  → Semantic Catalog
+  → Retrieval Planner
 ```
 
-Graph API 只转发这组服务 Principal 给 WeKnora 做 KB access check。
+它用于决定“问题涉及什么语义、优先查询什么来源”；具体企业事实仍由 WeKnora / Entity / Business Retriever 提供。
 
-## 5. v0.7 Workspace 影响
+## 6. Workspace
 
-切换 Workspace 后，Knowledge Principal 会重新解析 WeKnora Tenant 和 service key，因此同一个 `kbID` 的访问也必须重新通过当前 Workspace 权限链，浏览器无法直接切换 Tenant 绕过校验。
-
-## 6. 上游隔离
-
-当前 OpenClaw 图谱页面在 LeeClaw Plugin 中实现；WeKnora upstream GraphExplorer 不需要修改。历史 overlay 只作为历史兼容资产，不应扩大 Patch 面。
+图谱访问与 Knowledge Runtime 都服从当前 Workspace。浏览器不能指定 WeKnora Tenant 或 Service Credential；这些由服务端 Workspace Principal 生成。

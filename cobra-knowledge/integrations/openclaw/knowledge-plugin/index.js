@@ -1,5 +1,7 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { AuditLog } from "./lib/audit-log.js";
+import { createKnowledgeRuntimeTool } from "./lib/agent-tools.js";
+import { ContextRuntimeClient } from "./lib/context-runtime-client.js";
 import { resolveKnowledgeConfig } from "./lib/config.js";
 import { knowledgePrincipal, requireDurableProfileId } from "./lib/principal.js";
 import { WeKnoraClient } from "./lib/weknora-client.js";
@@ -49,8 +51,13 @@ export default definePluginEntry({
     const workspaces = new WorkspaceRegistry(config.workspaceRegistryPath, config.workspaceStatePath);
     const audit = new AuditLog(config.auditLogPath);
     const client = new WeKnoraClient(config);
+    const contextClient = new ContextRuntimeClient(config);
     const profileId = (options) => requireDurableProfileId(options.client);
     const principal = (options, minimumRole = "viewer") => knowledgePrincipal(options.client, workspaces, requestedWorkspace(options), minimumRole);
+
+    for (const toolName of ["leeclaw_context_retrieve", "leeclaw_context_get_evidence"]) {
+      api.registerTool((toolContext) => createKnowledgeRuntimeTool(api, workspaces, contextClient, toolContext, toolName), { name: toolName, optional: true });
+    }
 
     const record = (event) => {
       try { audit.record(event); }
@@ -117,7 +124,7 @@ export default definePluginEntry({
     registerMethod(api, "leeclaw.knowledge.health", "operator.read", async (options) => {
       const ctx = principal(options);
       await client.health(ctx);
-      return { ok: true, workspaceId: ctx.workspaceId, workspaceRole: ctx.workspaceRole, userId: ctx.userId, weknora: ctx.weknoraBaseUrl ?? config.weknoraBaseUrl, graph: config.graphApiBaseUrl || null };
+      return { ok: true, workspaceId: ctx.workspaceId, workspaceRole: ctx.workspaceRole, userId: ctx.userId, weknora: ctx.weknoraBaseUrl ?? config.weknoraBaseUrl, core: config.coreApiBaseUrl };
     });
     registerMethod(api, "leeclaw.knowledge.list", "operator.read", (options) => client.listKnowledgeBases(principal(options), String(options.params.creator ?? "all")));
     registerMethod(api, "leeclaw.knowledge.get", "operator.read", (options) => client.getKnowledgeBase(principal(options), requiredString(options.params, "id")));

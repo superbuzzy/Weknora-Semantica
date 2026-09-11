@@ -7,11 +7,12 @@ vet:
 	go vet ./...
 
 plugin-test:
+	node --test integrations/openclaw/workspace-core/test/*.test.js
 	node --test integrations/openclaw/knowledge-plugin/test/*.test.js
 	node --test integrations/openclaw/openviking-plugin/test/*.test.js
 
 verify:
-	./scripts/verify-v0.7.sh
+	./scripts/verify-v0.8.sh
 
 build:
 	mkdir -p bin

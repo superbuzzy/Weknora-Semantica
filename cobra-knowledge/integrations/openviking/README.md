@@ -1,15 +1,28 @@
-# OpenViking integration in v0.7
+# OpenViking integration in v0.8
 
-OpenViking is LeeClaw's **Memory + Skill Engine**.
-
-v0.7 does not use a static OpenViking account/user for a multi-user OpenClaw gateway. The LeeClaw OpenViking plugin resolves the durable OpenClaw session/profile identity and the validated LeeClaw Workspace at runtime, then calls standard OpenViking HTTP APIs with trusted Account/User headers.
+OpenViking 在 LeeClaw 中只承担：
 
 ```text
-OpenClaw profileId
-  + LeeClaw Workspace selection
-  → OpenViking User / Account
+Memory / Session / Experience
+Skill storage / semantic find / full SKILL.md read
 ```
 
-The Workspace resolver does not read WeKnora credentials, so OpenViking remains independent from the Knowledge Engine.
+身份来自 OpenClaw + Session-bound Workspace：
 
-Memory lifecycle uses OpenClaw public hooks; Skill remains stored only in OpenViking. No OpenViking upstream source file is modified.
+```text
+X-OpenViking-Account = validated session workspace.openviking.accountId
+X-OpenViking-User    = OpenClaw durable profileId
+```
+
+Dynamic Skill Runtime 在 OpenClaw `before_prompt_build` 中执行：
+
+```text
+/skills/find
+→ score threshold
+→ personal Skill 优先 / shared Skill 次之
+→ Level-2 SKILL.md
+→ allowed-tools ∩ OpenClaw Host Tool Authority
+→ current Turn context + toolsAllow
+```
+
+OpenViking 不拥有最终工具授权权，不存企业权威事实，也不直接写 WeKnora。已有 Agent Session 固定 Workspace；页面切换只影响后续新/reset Session。

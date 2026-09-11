@@ -123,7 +123,7 @@ func (s *Server) handle(ctx context.Context, req request) response {
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 	switch req.Method {
 	case "initialize":
-		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.6.0"}}
+		resp.Result = map[string]interface{}{"protocolVersion": "2025-06-18", "capabilities": map[string]interface{}{"tools": map[string]interface{}{}}, "serverInfo": map[string]string{"name": "cobra-knowledge", "version": "0.8.0"}}
 	case "notifications/initialized":
 		resp.Result = map[string]interface{}{}
 	case "tools/list":

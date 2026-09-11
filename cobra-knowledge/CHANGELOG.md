@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.0
+
+- Added OpenClaw Agent Knowledge tools `leeclaw_context_retrieve` and `leeclaw_context_get_evidence`.
+- Added online Runtime Context Service reusing Ontology, Semantic Catalog, Planner, Retriever, Arbiter and Context Pack.
+- Upgraded OpenViking Skill from management-only to per-turn semantic discovery, L2 `SKILL.md` loading and prompt injection.
+- Enforced `allowed-tools` as a narrowing intersection with OpenClaw `PluginHookToolAuthority`; explicit empty declarations deny all optional tools.
+- Added personal-Skill precedence over workspace-shared Skill, then score ordering within the same scope.
+- Replaced mutable profile-wide Chat workspace semantics with session-pinned Workspace binding; new/reset sessions adopt the current profile default.
+- Added server-side Knowledge Base allowlists and evidence revalidation to prevent chunk-id scope bypass.
+- Replaced separate Graph API configuration with one LeeClaw Core API for Graph + Runtime Context.
+- Preserved RAG fallback gaps when required structured/live sources are unavailable.
+- Kept OpenClaw, WeKnora and OpenViking upstream source trees unmodified.
+
 ## v0.7.0
 
 - Replaced static single-workspace configuration with a server-side Workspace Registry bound to OpenClaw durable profile IDs.

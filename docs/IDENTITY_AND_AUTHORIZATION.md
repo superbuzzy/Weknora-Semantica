@@ -1,113 +1,158 @@
-# LeeClaw v0.7 身份、Workspace 与授权模型
+# LeeClaw v0.8 身份、Workspace 与授权模型
 
 ## 1. 唯一人类账号
 
-LeeClaw 只维护一套人类账号：OpenClaw durable User Profile。
+LeeClaw 只认 OpenClaw durable User Profile：
 
 ```text
-OpenClaw authenticatedUserProfile.profileId
-                  ↓
-            global user id
+authenticatedUserProfile.profileId
+              ↓
+        global user id
 ```
 
-WeKnora/OpenViking 不要求用户再次登录。
+WeKnora 和 OpenViking 不建立第二套人类登录。
 
-## 2. v0.7 对 v0.6 的修正
-
-v0.6 已解决“用户身份不能由浏览器覆盖”，但 Workspace 仍是静态服务配置。v0.7 直接删除静态 Workspace/Tenant/Account 路径，替换为服务端 Workspace Registry。
-
-另外，WeKnora API Principal 的 External User 适合标识调用主体，但共享 service key 下它不等价于 OpenClaw 多用户 RBAC。v0.7 因此不再把 WeKnora 用户/成员体系当 LeeClaw 人类账号体系。
-
-## 3. Workspace 是 LeeClaw 的授权域
+## 2. Workspace 是资源授权域
 
 Workspace Registry 保存：
 
 ```text
-logical workspace
-├─ members: OpenClaw profileId + role
-├─ WeKnora tenant mapping + API key env reference
-└─ OpenViking account mapping
+workspace
+├─ members: profileId + role
+├─ WeKnora tenant + service-key env + optional KB allowlist
+└─ OpenViking account
 ```
 
-浏览器只可以提交逻辑 `workspaceId` 作为切换请求。服务端先验证当前 profile membership；未经验证的 logical id 永远不能成为下游 Tenant/Account。
+角色：
 
-## 4. 权限交集
+```text
+viewer < editor < admin < owner
+```
 
-一次写操作最终需要：
+一次管理操作需要：
 
 ```text
 OpenClaw platform scope
 AND Workspace role
-AND downstream machine-principal capability
+AND downstream service capability
 ```
 
-典型矩阵：
+## 3. v0.8：默认 Workspace 与 Session Workspace 分离
 
-| 操作 | OpenClaw Scope | Workspace Role |
-|---|---|---|
-| 查看 KB/Memory/Skill | operator.read | viewer+ |
-| 新建/修改 KB 内容 | operator.write | editor+ |
-| 删除 KB / 管理共享 | operator.admin | admin+ |
-| 增删 Workspace 成员 | operator.admin | owner |
+v0.7 用 `profileId -> selected workspace` 同时驱动页面和 Chat Runtime。这个逻辑在用户切换 Workspace 后可能让已有聊天历史突然进入另一资源域。
 
-## 5. WeKnora Principal
-
-服务端根据已验证 Workspace 生成：
+v0.8 直接替换为两层状态：
 
 ```text
-X-API-Key          = env[workspace.weknora.apiKeyEnv]
-X-Tenant-ID        = workspace.weknora.tenantId
-X-External-User-ID = OpenClaw profileId
+Profile Default Workspace
+  profileId -> workspaceId
+
+Session Workspace Binding
+  hashed session identity -> profileId + workspaceId
 ```
 
-用户 Bearer、浏览器 external user、浏览器 tenant override 都不属于 v0.7 活跃路径。
+页面切换只改变 Profile Default Workspace。Agent Session 第一次运行时绑定当时的默认 Workspace，之后保持固定。
 
-## 6. OpenViking Principal
+```text
+Session A: 重庆公司
+用户切默认 Workspace → 总部
+Session A: 仍为重庆公司
+/new 或 /reset
+Session B: 总部
+```
+
+Session binding 优先使用 OpenClaw `sessionId`，缺失时才退到 `sessionKey`。原始 Session ID 不写入状态文件，只保存哈希键。
+
+如果用户被移出已绑定 Workspace，既有 Session fail closed，不会自动漂移到另一个 Workspace。
+
+## 4. Knowledge Principal
+
+服务端生成：
+
+```text
+userId              = profileId
+workspaceId         = Session/Request 已验证 Workspace
+workspaceRole       = Workspace role
+X-Tenant-ID         = workspace.weknora.tenantId
+X-API-Key           = env[workspace.weknora.apiKeyEnv]
+X-External-User-ID  = profileId
+knowledgeBaseIds    = workspace.weknora.knowledgeBaseIds
+```
+
+浏览器和模型都不能声明这些可信字段。
+
+## 5. OpenViking Principal
 
 ```text
 X-OpenViking-Account = workspace.openviking.accountId
-X-OpenViking-User    = OpenClaw profileId
+X-OpenViking-User    = profileId
 ```
 
-OpenViking 解析 Workspace 不需要 WeKnora credential；Knowledge 和 Memory/Skill 两条引擎边界独立。
+Memory、Skill 搜索和 Skill 加载都使用同一个 Session-bound Workspace。
 
-## 7. Workspace 成员治理
+## 6. Agent Knowledge Tool
 
-成员对象只保存：
+模型只提交业务参数：
+
+```text
+retrieve:
+  query
+  knowledge_base_id?
+  domain?
+  task?
+
+evidence:
+  chunk_id
+```
+
+身份、Workspace、Tenant、Credential、KB allowlist 全部由服务端恢复。
+
+Evidence Tool 读取 chunk 后，再用返回的 `knowledge_base_id` 与 Workspace allowlist 比对。已知 chunk id 不能绕过 KB Scope。
+
+## 7. Skill Tool Policy
+
+OpenViking Skill 的 `allowed-tools` 不是授权源。
+
+```text
+Effective Turn Tools
+=
+OpenClaw Host-approved Tools
+∩
+Skill allowed-tools
+```
+
+Skill 不能扩大平台权限；显式空列表表示 deny-all optional tools。
+
+## 8. 状态存储
+
+v0.8 Workspace state 使用 canonical version 2：
 
 ```json
 {
-  "profileId": "openclaw-profile-id",
-  "role": "editor",
-  "displayName": "optional cache"
+  "version": 2,
+  "profiles": {
+    "profile-1": "workspace-cq"
+  },
+  "sessions": {
+    "<sha256>": {
+      "profileId": "profile-1",
+      "workspaceId": "workspace-cq",
+      "boundAt": "..."
+    }
+  }
 }
 ```
 
-成员页面从 OpenClaw `users.list` 获取 Profile 信息。owner 可以在拥有 `operator.admin` 的情况下增加、修改或移除成员；系统阻止删除/降级最后一个 owner。
-
-## 8. Current Workspace
-
-当前选择按 `profileId -> workspaceId` 服务端持久化。Knowledge 页面、Memory/Skill 页面和 Chat Memory Runtime 都读取同一 selection state。
-
-因此：
-
-```text
-切换 Workspace
-  → Knowledge Tenant 变更
-  → OpenViking Account 变更
-  → 后续 Chat Memory scope 变更
-```
-
-不会出现页面已切换、Agent 仍读旧空间 Memory 的分叉。
+v0.7 flat state 会在首次写入 v0.8 state 时单向升级到该结构，不再作为第二套运行模型存在。
 
 ## 9. 生产扩展
 
-v0.7 Registry/selection 使用单 Gateway 文件存储。HA 部署应实现相同 Contract 的数据库后端，并增加：
+当前 Registry / Session binding / Audit 是单 Gateway 文件后端。HA 时应把相同 Contract 换成共享数据库，并补：
 
-- 乐观锁/事务；
-- Workspace 变更审计；
-- 缓存失效；
-- Secret Manager 引用；
-- 集中授权事件与告警。
+- 事务与乐观锁；
+- Session binding TTL / 清理；
+- Workspace membership cache invalidation；
+- Secret Manager；
+- 集中审计与安全告警。
 
-升级时替换存储实现，不改变 browser 参数或下游 principal contract。
+这些变化不应修改 Browser 参数、Agent Tool Schema 或下游 Principal Contract。

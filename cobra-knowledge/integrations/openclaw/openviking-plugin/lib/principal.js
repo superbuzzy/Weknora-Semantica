@@ -13,13 +13,7 @@ export function openVikingPrincipal(client, workspaceRegistry, requestedWorkspac
   return fromWorkspace(profileId, workspaceRegistry.resolve(profileId, requestedWorkspaceId));
 }
 
-export function sessionPrincipal(api, workspaceRegistry, sessionKey) {
-  const key = String(sessionKey ?? "").trim();
-  if (!key) return null;
-  const entry = api.runtime.agent.session.getSessionEntry({ sessionKey: key, readConsistency: "latest" });
-  const actor = entry?.createdActor;
-  if (actor?.type !== "human" || actor?.source !== "profile" || !String(actor.id ?? "").trim()) return null;
-  const profileId = String(actor.id).trim();
-  try { return fromWorkspace(profileId, workspaceRegistry.resolve(profileId)); }
-  catch { return null; }
+export function sessionPrincipal(_api, workspaceRegistry, sessionKey, sessionId) {
+  const workspace = workspaceRegistry.resolveSession(_api, sessionKey, sessionId);
+  return workspace ? fromWorkspace(workspace.profileId, workspace) : null;
 }
