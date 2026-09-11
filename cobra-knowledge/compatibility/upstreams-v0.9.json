@@ -1,6 +1,6 @@
 {
-  "release": "0.8.0",
-  "policy": "OpenClaw is the only human identity and final host tool authority; OpenViking Skill may narrow tools; LeeClaw Core retrieves workspace-scoped enterprise knowledge.",
+  "release": "0.9.0",
+  "policy": "OpenClaw remains the only human identity and final host tool authority; LeeClaw v0.9 adds request-scoped retrieval governance across WeKnora, ontology and business data without modifying upstream kernels.",
   "validated_snapshots": {
     "openclaw": {
       "version": "2026.9.3",
@@ -25,7 +25,8 @@
         "X-External-User-ID direct principal",
         "API-key capabilities and knowledge_base_ids scope",
         "knowledge search",
-        "chunk by id"
+        "chunk by id",
+        "Neo4j entity graph storage"
       ]
     },
     "openviking": {

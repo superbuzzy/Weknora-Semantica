@@ -45,7 +45,11 @@ if ! grep -R -Fq "chunks/by-id" "$WEKNORA/internal"; then
   echo "FAIL WeKnora chunk evidence contract missing" >&2
   exit 1
 fi
-echo "PASS WeKnora external-principal/search/evidence contracts"
+if ! grep -R -Fq "Neo4j" "$WEKNORA"; then
+  echo "FAIL WeKnora Neo4j entity graph contract missing" >&2
+  exit 1
+fi
+echo "PASS WeKnora principal/search/evidence/entity-graph contracts"
 
 need_file "$OPENVIKING/openviking/server/auth/plugins/trusted.py"
 need_file "$OPENVIKING/openviking/server/routers/skills.py"
@@ -60,4 +64,4 @@ need_text "$OPENVIKING/openviking/core/skill_loader.py" 'allowed_tools_declared'
 need_text "$OPENVIKING/openviking/core/skill_loader.py" '"allowed-tools"'
 echo "PASS OpenViking trusted-principal/dynamic-skill contracts"
 
-echo "PASS v0.8 upstream compatibility gate"
+echo "PASS v0.9 upstream compatibility gate"

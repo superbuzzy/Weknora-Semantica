@@ -1,12 +1,12 @@
-# LeeClaw v0.8
+# LeeClaw v0.9
 
-> **OpenClaw Agent Runtime + WeKnora Knowledge + OpenViking Memory & Skill**
+> **OpenClaw Agent Runtime + WeKnora Knowledge + OpenViking Memory & Skill + Retrieval Governance**
 
-LeeClaw 以 OpenClaw 为唯一产品主干和 Agent Runtime，把 WeKnora 的企业知识能力、OpenViking 的长期记忆与 Skill 能力接入同一个运行时。自研代码只补三者之间缺失的 Workspace、Knowledge Runtime、本体语义、检索治理和安全边界，不重写三个上游已经成熟的能力。
+LeeClaw 以 OpenClaw 为唯一产品主干和 Agent Runtime，把 WeKnora 的企业知识能力、OpenViking 的长期记忆与 Skill 能力接入同一个运行时。自研代码只补三者之间缺失的 Workspace、Ontology、Retrieval、Context、Adapter 和跨系统治理，不修改三个 upstream 内核。
 
-v0.8 的主题是：**让 Agent 真正使用 Skill 和 Knowledge。**
+v0.9 的主题是：**让 Agent 不只“能查”，还要“查对、裁对、知道是否查完整”。**
 
-v0.7 完成了多人、多 Workspace 和 Knowledge 管理面；v0.8 进一步把这些能力接入每一次 OpenClaw Agent Turn：自动发现并加载当前 Workspace 的 Skill，通过 OpenClaw 原生工具检索企业知识和证据，并把 Skill 的工具声明收敛到 OpenClaw 已批准的工具面内。
+v0.8 已完成 Skill Runtime + Knowledge Runtime；v0.9 在此基础上补齐 Retrieval Governance：Planner v2、Entity Retriever、Business Retriever Contract、多 KB 本体联合、Evidence Contract v2、冲突/时效裁决和 Completeness Gate。
 
 ---
 
@@ -15,359 +15,273 @@ v0.7 完成了多人、多 Workspace 和 Knowledge 管理面；v0.8 进一步把
 ```mermaid
 flowchart TB
     U[用户] --> OC[OpenClaw\n唯一登录 + 统一 UI + Agent Runtime]
-    OC --> P[Durable User Profile\nprofileId]
-    P --> WR[LeeClaw Workspace Core\n成员 / 角色 / 默认空间 / Session 固定空间]
+    OC --> WR[LeeClaw Workspace Core\n成员 / 角色 / Session 固定空间]
+    OC --> RT[LeeClaw Agent Runtime Hook]
+    RT --> OV[OpenViking\nMemory + Skill]
+    RT --> TA[OpenClaw Tool Authority]
 
-    OC --> CHAT[Agent Turn]
-    OC --> KUI[Knowledge 管理]
-    OC --> MUI[Memory]
-    OC --> SUI[Skills]
-
-    CHAT --> RT[LeeClaw Agent Runtime Hook]
-    RT --> MEM[OpenViking Memory Recall]
-    RT --> SR[Skill Resolver]
-    SR --> OV[OpenViking\nMemory + Skill Engine]
-    SR --> TA[OpenClaw Tool Authority]
-    TA --> CHAT
-
-    CHAT --> KT[leeclaw_context_retrieve\nleeclaw_context_get_evidence]
+    OC --> KT[leeclaw_context_retrieve\nleeclaw_context_get_evidence]
     KT --> KCORE[LeeClaw Core Runtime]
-    KCORE --> PL[Ontology / Semantic Catalog / Planner]
-    PL --> WK[WeKnora\nRAG / Chunk / Entity Graph]
-    PL --> ONT[Ontology Registry]
-    KCORE --> CP[Context Pack + Evidence]
-    CP --> CHAT
-
-    KUI --> WK
-    MUI --> OV
-    SUI --> OV
+    KCORE --> ONT[Ontology Federation + Semantic Catalog]
+    ONT --> PL[Retrieval Planner v2]
+    PL --> BR[Business Retriever]
+    PL --> ER[Entity Retriever]
+    PL --> RAG[WeKnora Wiki / RAG]
+    PL --> OR[Ontology Retriever]
+    BR --> BG[MCP / REST / SQL Gateway]
+    ER --> NEO[WeKnora Entity Graph / Neo4j]
+    RAG --> WK[WeKnora]
+    OR --> REG[LeeClaw Ontology Registry]
+    BR --> NORM[Evidence v2]
+    ER --> NORM
+    RAG --> NORM
+    OR --> NORM
+    NORM --> ARB[Freshness / Conflict Arbiter]
+    ARB --> CG[Completeness Gate]
+    CG --> CP[Context Pack]
+    CP --> OC
 ```
 
-核心边界保持不变：
+核心边界：
 
-- **OpenClaw**：人类账号、UI、Agent Runtime、最终 Tool Authority；
-- **WeKnora**：企业文档、KB、Wiki、FAQ、RAG、Entity Graph 等 Knowledge Engine；
-- **OpenViking**：Memory、Session、Experience、Skill 的唯一 Source of Truth；
-- **LeeClaw**：Workspace、Ontology、Retrieval、Context、Adapter 和跨系统治理。
+- **OpenClaw**：唯一人类账号、UI、Agent Runtime、最终 Tool Authority；
+- **WeKnora**：企业文档、KB、Wiki、FAQ、RAG、Entity Graph；
+- **OpenViking**：Memory、Session、Experience、Skill Source of Truth；
+- **LeeClaw**：Workspace、Ontology、Retrieval、Arbitration、Context、Adapter、Governance。
 
 ---
 
-## 2. v0.8 的 Agent 运行链
+## 2. v0.9 Retrieval Governance
 
-一次普通对话现在按下面的顺序运行：
+一次 Knowledge Runtime 请求现在按以下链路执行：
 
 ```text
-用户问题
+User Query
   ↓
-OpenClaw Agent Session
+OpenClaw profileId + Session Workspace
   ↓
-从 Session createdActor 恢复 OpenClaw profileId
+Workspace KB Scope
   ↓
-Workspace Core 固定本 Session 的 Workspace
+KB Ontology Binding
   ↓
-┌─────────────────────────────────────┐
-│ OpenViking Runtime                  │
-│ 1. Memory Recall                    │
-│ 2. Skill Semantic Find              │
-│ 3. 加载完整 SKILL.md                │
-│ 4. allowed-tools ∩ Tool Authority   │
-└─────────────────────────────────────┘
+Request-scoped Ontology Federation
   ↓
-OpenClaw 构造本 Turn Prompt + Tool Surface
+Semantic Catalog
   ↓
-Agent 按需调用 LeeClaw Knowledge Tool
+Retrieval Planner v2
   ↓
-Ontology / Planner / WeKnora / Evidence
+required sources + supporting sources
+  ↓
+Business / Entity / Wiki-RAG / Ontology Retriever
+  ↓
+Evidence Contract v2
+  ↓
+Freshness / Conflict Arbiter
+  ↓
+Completeness Gate
   ↓
 Context Pack
-  ↓
-模型回答 / Tool 执行
-  ↓
-OpenViking Capture / Commit
 ```
 
-三个概念的职责必须区分：
-
-> **Skill 决定“这类任务应该怎么做”；Knowledge 决定“企业事实是什么”；Memory 帮 Agent 理解“这个用户和历史上下文是什么”。**
-
-Memory 不能代替企业事实，Skill 也不能自行授予工具权限。
+Planner 只负责**选择来源和生成受约束执行计划**；Retriever 只负责**访问具体来源并标准化返回结果**。业务系统 URL、SQL、认证方式不得写进 Planner 或 Core 业务逻辑。
 
 ---
 
-## 3. Skill Runtime
+## 3. Planner v2
 
-v0.8 将 OpenViking Skill 从“管理资产”接入了 OpenClaw 当前 Agent Turn。
-
-### 3.1 分层加载
+Planner v2 的核心输出包括：
 
 ```text
-用户问题
-  ↓
-OpenViking /skills/find
-  ↓
-L0/L1 候选 + score threshold
-  ↓
-个人 Skill 优先，共享 Skill 次之
-  ↓
-选中一个 Skill
-  ↓
-Level 2 获取完整 SKILL.md
-  ↓
-只把正文作为当前 Turn 的业务执行规程
+intent
+required_sources
+supporting_sources
+freshness_requirement
+ontology_scope
+allow_fallback
+blocking_issues
+steps[]
 ```
 
-v0.8 每个 Turn 最多自动激活一个 Skill，避免多个 SOP 同时注入导致规则冲突。
-
-### 3.2 个人 Skill 与共享 Skill
-
-OpenViking 两类 Skill 都保留：
+每个 Step 明确：
 
 ```text
-viking://user/{profileId}/skills/...   个人 Skill
-viking://agent/skills/...              Workspace 共享 Skill
+source
+operation
+required
+freshness_requirement
+target_class_ids
+target_property_ids
+target_relation_ids
+target_terms
 ```
 
-Resolver 使用稳定优先级：
+典型规则：
 
-```text
-个人 Skill
-  > Workspace 共享 Skill
-  > 同一作用域内按语义分数降序
-```
+- 定义/解释：正式 Wiki/RAG 为 required，本体可作为 supporting；
+- 结构化实体事实：Entity Graph 为 required；
+- 当前/实时业务指标：Business Data 为 required，freshness=live；
+- 本体、Domain/Range、合法关系：Ontology Graph 为 required；
+- 诊断类问题：必要事实来源 + supporting 文档证据并行执行。
 
-这样用户自己的已确认工作方法可以覆盖同类共享方法，同时共享 Skill 仍作为组织默认能力。
-
-### 3.3 Skill 不能扩权
-
-Skill 中的 `allowed-tools` / `allowed_tools` 只是一项**限制声明**。
-
-最终工具集合为：
-
-```text
-OpenClaw 当前 Turn 已批准工具
-            ∩
-Skill 声明允许的工具
-```
-
-Skill 无权增加 OpenClaw 没有批准的 Tool。显式空 `allowed-tools` 表示当前 Skill 禁止所有可选 Tool。
-
-v0.8 支持确定性别名：
-
-```text
-context.retrieve       → leeclaw_context_retrieve
-context.get_evidence   → leeclaw_context_get_evidence
-Read / Write / Edit    → read / write / edit
-Bash                   → exec
-WebSearch / WebFetch   → web_search / web_fetch
-```
-
-类似 `Bash(git:*)` 这种带参数级限制的 token，如果当前 Host 无法等价表达，就不会被粗暴扩大成 unrestricted `exec`。
+复杂问题仍可进入 `ComplexPlanRefiner`，但 Refiner 只能重写受约束 Plan，不能绕过 Tool Authority 或直接访问数据源。
 
 ---
 
-## 4. Knowledge Runtime
+## 4. Entity Retriever
 
-Knowledge 管理页面和 Agent 检索通道继续分离。
-
-### 管理通道
+v0.9 把 Entity Graph 从“可展示”升级为 Runtime Retriever。
 
 ```text
-用户
-  → OpenClaw Knowledge UI
-  → leeclaw.knowledge.* Gateway Contract
-  → Workspace / Role Gate
-  → WeKnora Adapter
-  → WeKnora
+Planner
+  → EntityQuerySource
+  → WeKnora Neo4j Adapter
+  → 实体定位 / 属性读取 / 关系路径
+  → Evidence v2
 ```
 
-### Agent 通道
+Entity Retriever 与 UI 共用稳定 `GraphView` 数据合同，不依赖 Neo4j 原始记录结构。Neo4j 查询逻辑留在 Adapter 层，因此后续 WeKnora 图存储变化时只替换 Adapter。
 
-```text
-OpenClaw Agent
-  → leeclaw_context_retrieve
-  → LeeClaw Core Runtime
-  → Semantic Catalog / Planner
-  → WeKnora RAG + Ontology
-  → Arbiter / Context Pack
-```
-
-Agent 面只暴露两个窄工具：
-
-```text
-leeclaw_context_retrieve
-leeclaw_context_get_evidence
-```
-
-模型看不到 Tenant、Account、API Key、External User 等身份字段。
-
-### `leeclaw_context_retrieve`
-
-输入只有业务语义：
-
-```text
-query
-knowledge_base_id?   # 必须属于当前 Workspace
-business domain?
-task type?
-```
-
-服务端补齐：
-
-```text
-OpenClaw profileId
-Workspace
-WeKnora Tenant
-Service Credential
-Knowledge Base Scope
-```
-
-然后执行：
-
-```text
-Ontology Binding
-  → Semantic Catalog
-  → Retrieval Planner
-  → Retriever
-  → Arbiter
-  → Context Pack
-```
-
-### `leeclaw_context_get_evidence`
-
-Agent 只能提交 `chunk_id`。服务端会再次校验该 chunk 所属 Knowledge Base 是否仍在当前 Workspace 允许范围内，不能用已知 chunk id 绕过 Workspace KB Scope。
+实体结果保留 `knowledge_base_id / knowledge_id / entity_id / chunk_id` 等来源信息，可继续使用 `leeclaw_context_get_evidence` 回溯原始文档证据。
 
 ---
 
-## 5. Workspace：默认空间与会话空间分开
+## 5. Business Retriever Contract
 
-v0.8 对 v0.7 的 Workspace 语义做了关键修正。
-
-### UI 默认 Workspace
-
-用户在管理页面切换 Workspace：
+实时业务数据通过独立合同接入：
 
 ```text
-profileId → default workspace
+BusinessQuerySource
+  ↓
+MCP / REST / SQL Gateway Adapter
 ```
 
-它决定新 Knowledge 页面请求以及**后续新 Agent Session** 的默认空间。
-
-### Agent Session Workspace
-
-一个 Agent Session 第一次运行时：
+当前提供一个通用 HTTP Gateway Adapter：
 
 ```text
-OpenClaw Session createdActor
-  → profileId
-  → 当前 default workspace
-  → Session Workspace Binding
+POST {LEECLAW_BUSINESS_GATEWAY_URL}/v1/query
+Authorization: Bearer ${LEECLAW_BUSINESS_GATEWAY_TOKEN}   # optional
 ```
 
-绑定后，同一个 Session 不会因为用户随后在页面切换 Workspace 而改变作用域。
+请求只包含业务语义和服务端已经确认的 Workspace Scope；返回统一 `Assertion[] + Gaps[]`。具体系统 URL、SQL、数据库连接、MCP Tool 名称均不进入 LeeClaw Core。
 
-例如：
-
-```text
-Session A 在“重庆公司”开始
-  ↓
-用户把页面默认空间切到“总部”
-  ↓
-Session A 继续固定“重庆公司”
-  ↓
-/new 或 /reset 后的新 Session B 使用“总部”
-```
-
-这避免同一段对话历史跨 Workspace 继续检索 Knowledge、Memory 或 Skill。
-
-Session binding 使用哈希键写入 v0.8 state，不持久化原始 session id。用户失去某 Workspace membership 后，该 Workspace 的既有 Session 会 fail closed，而不会静默切到另一个空间。
+如果 Planner 判定 Business Data 是 required，而网关未配置、调用失败或没有可用事实，`complete` 必须保持 `false`。
 
 ---
 
-## 6. 身份与下游映射
+## 6. 多 Knowledge Base 本体联合
 
-唯一人类身份仍然是：
+v0.9 不再要求请求只能绑定一个 KB 本体。
+
+多个 KB 会按当前请求范围进行：
+
+```text
+KB Binding
+  → namespace
+  → Semantic Catalog 编译
+  → concept id / label 对齐
+  → conflict detection
+  → request-scoped federated catalog
+```
+
+联合规则采用保守策略：
+
+- 相同 concept ID + 相同 label：合并 alias 和 preferred source；
+- 相同 label + 不同 concept ID：保留 concept-sense conflict；
+- 相同 concept ID + 不同 label：保留冲突；
+- 冲突与当前 query 相关时进入 `blocking_issues`，不得静默 merge 后继续声称完整。
+
+本体生命周期仍归 LeeClaw Ontology Registry，实体图生命周期仍归 WeKnora，两者只在请求期联合，不建立第二份可写主数据。
+
+---
+
+## 7. Evidence Contract v2
+
+所有 Retriever 逐步统一到以下证据合同：
+
+```text
+source
+source_type
+source_id
+knowledge_base_id
+knowledge_id
+entity_id
+chunk_id
+value
+unit
+version
+effective_time
+observed_at
+valid_from / valid_to
+confidence
+quality
+provenance
+metadata
+```
+
+Evidence v2 保留 v0.8 已有字段，避免破坏 WeKnora Chunk/Graph 集成，同时补齐跨来源裁决需要的来源类型、事实值、时效和 provenance。
+
+---
+
+## 8. Arbitration 与 Completeness Gate
+
+Arbiter 继续按事实槽位进行冲突裁决：
+
+```text
+有效时间
++ Source Authority
++ Predicate Source Priority
++ Confidence
++ Freshness
++ Supersedes
+```
+
+无法形成决定性优势时返回 `unresolved_conflict`，不静默选择一个值。
+
+v0.9 的 `complete=true` 以 required source 为核心判断依据。Context Pack 新增：
+
+```text
+source_status[]
+blocking_gaps[]
+gaps[]
+complete
+```
+
+规则：
+
+- required source 未满足 → blocking gap → `complete=false`；
+- unresolved conflict → blocking gap → `complete=false`；
+- 相关本体联合冲突 → blocking gap → `complete=false`；
+- supporting source 失败只保留普通 Gap，不会单独把一个已经完整的必要事实判成 incomplete；
+- RAG fallback 可以补解释性证据，但不能替代缺失的实时/结构化 required source。
+
+---
+
+## 9. Workspace、身份与权限
+
+唯一人类身份保持不变：
 
 ```text
 OpenClaw authenticatedUserProfile.profileId
 ```
 
-Workspace 解析完成后：
+Agent Session 第一次运行时绑定 Workspace，后续页面切换默认 Workspace 不会改变既有 Session Scope。失去 membership 后既有 Session fail closed。
+
+下游身份由服务端映射：
 
 ```text
 WeKnora:
-  X-API-Key          = 当前 Workspace 对应服务凭证
-  X-Tenant-ID        = 当前 Workspace Tenant
+  X-API-Key          = Workspace service credential
+  X-Tenant-ID        = Workspace tenant
   X-External-User-ID = OpenClaw profileId
 
 OpenViking:
-  X-OpenViking-Account = 当前 Session Workspace Account
+  X-OpenViking-Account = Session Workspace Account
   X-OpenViking-User    = OpenClaw profileId
 ```
 
-浏览器无权提供这些可信字段。
+浏览器不能提供这些可信字段。
 
----
-
-## 7. Knowledge 管理能力继续保留
-
-v0.7 已完成的 OpenClaw 原生 Knowledge 管理面全部保留：
-
-```text
-Knowledge Base CRUD
-Documents：文件 / URL / 手工知识 / 重解析 / 取消 / 删除
-Wiki CRUD
-FAQ CRUD
-Tags CRUD
-Hybrid Search
-Entity Graph
-Ontology Graph
-Organization Share
-Workspace Member / Role
-LeeClaw Audit
-```
-
-WeKnora 仍然是 Knowledge Engine，OpenClaw 前端不复制 WeKnora 后端业务规则。
-
----
-
-## 8. 本体在 v0.8 的位置
-
-本体仍属于 Knowledge：
-
-```text
-Knowledge
-├─ 文档 / Wiki / FAQ / RAG   → WeKnora
-├─ Entity Graph              → WeKnora GraphRAG / Neo4j
-└─ Ontology Graph            → LeeClaw Ontology Registry
-```
-
-实体图和本体图统一投影为稳定 `GraphView`，但底层生命周期不合并。
-
-v0.8 中本体开始真正参与 Agent Runtime：
-
-```text
-Knowledge Base Binding
-  → Ontology
-  → Semantic Catalog
-  → Planner
-  → Source Selection
-```
-
-当前一个请求只有在明确收敛到单个 Knowledge Base 时才加载该 KB 的绑定本体；多 KB 本体合并仍留到后续版本，避免把不同本体空间粗暴拼接。
-
----
-
-## 9. RAG fallback 的原则
-
-如果 Ontology Planner 判断应查询结构化/实时业务来源，但当前还没有对应 Retriever，LeeClaw 可以补一次当前 Workspace 的 WeKnora RAG 证据用于解释。
-
-但是：
-
-```text
-RAG evidence ≠ live structured fact
-```
-
-因此 fallback 不会删除原来的 Gap，也不会把 `complete=false` 错改为 `true`。
+Skill 的 `allowed-tools` 仍只能收窄 OpenClaw Tool Authority，不能扩权。
 
 ---
 
@@ -381,11 +295,10 @@ RAG evidence ≠ live structured fact
 | KB / 文档 / Wiki / FAQ / RAG | WeKnora |
 | Entity Graph | WeKnora |
 | Ontology / Binding / Version | LeeClaw Ontology Registry |
-| Memory / Session / Experience | OpenViking |
-| Skill | OpenViking |
-| 实时业务事实 | 业务 API / MCP |
+| Memory / Session / Experience / Skill | OpenViking |
+| 实时业务事实 | 业务 API / MCP / 数据网关 |
 
-任何新功能开发前先确定唯一 Source of Truth，禁止建立第二份可写主数据。
+任何新功能开发前必须先确定唯一 Source of Truth。
 
 ---
 
@@ -394,16 +307,18 @@ RAG evidence ≠ live structured fact
 ```text
 cobra-knowledge/
 ├─ integrations/openclaw/
-│  ├─ workspace-core/          # Workspace / Role / Session binding
-│  ├─ knowledge-plugin/        # Knowledge UI + Agent Knowledge Tools
-│  └─ openviking-plugin/       # Memory + Dynamic Skill Runtime
+│  ├─ workspace-core/
+│  ├─ knowledge-plugin/
+│  └─ openviking-plugin/
 ├─ internal/
-│  ├─ runtimecontext/          # 在线 Knowledge Runtime
-│  ├─ retrieval/               # Semantic Catalog / Planner / Arbiter
-│  ├─ context/                 # Retriever / Context Pack
-│  ├─ ontology/                # Ontology Registry
-│  ├─ graphview/               # Entity/Ontology GraphView
-│  └─ adapters/weknora/        # WeKnora Adapter
+│  ├─ runtimecontext/
+│  ├─ retrieval/
+│  ├─ context/
+│  ├─ ontology/
+│  ├─ graphview/
+│  └─ adapters/
+│     ├─ weknora/
+│     └─ business/
 ├─ configs/
 ├─ compatibility/
 └─ scripts/
@@ -414,13 +329,11 @@ upstream/
 └─ weknora/
 ```
 
-三个 `upstream/` 仍是独立 submodule。LeeClaw 功能代码不写入上游目录。
+三个 `upstream/` 保持独立 submodule，LeeClaw 功能代码不得写入上游目录。
 
 ---
 
-## 12. 上游同步策略
-
-v0.8 当前固定验证：
+## 12. 当前上游兼容基线
 
 ```text
 OpenClaw   v2026.9.3
@@ -439,7 +352,7 @@ OpenViking v0.4.19
   → 只在 Plugin / Adapter 边界吸收差异
 ```
 
-要求继续保持：
+必须继续保持：
 
 ```text
 OpenClaw upstream modified files: 0
@@ -451,51 +364,49 @@ OpenViking upstream modified files: 0
 
 ## 13. 配置与验证
 
-配置：
+活跃配置：
 
 ```text
-cobra-knowledge/configs/openclaw-v0.8.example.json
-cobra-knowledge/configs/workspaces-v0.8.example.json
+cobra-knowledge/configs/openclaw-v0.9.example.json
+cobra-knowledge/configs/workspaces-v0.9.example.json
 ```
 
-本地门禁：
+本地验证：
 
 ```bash
 cd cobra-knowledge
-./scripts/verify-v0.8.sh
+./scripts/verify-v0.9.sh
 ```
 
 上游契约：
 
 ```bash
-./scripts/check-v0.8-upstreams.sh \
+./scripts/check-v0.9-upstreams.sh \
   ../upstream/openclaw \
   ../upstream/weknora \
   ../upstream/openviking
 ```
 
-派生 OpenClaw：
+业务数据 Retriever 为可选装配；需要实时问数时配置：
 
-```bash
-./integrations/openclaw/apply-integration.sh \
-  ../upstream/openclaw \
-  ../build/openclaw-v0.8
+```text
+LEECLAW_BUSINESS_GATEWAY_URL
+LEECLAW_BUSINESS_GATEWAY_TOKEN   # optional
 ```
 
 ---
 
-## 14. v0.8 当前边界
+## 14. v0.9 当前边界
 
-v0.8 已完成“Agent 能动态使用 Skill + 企业 Knowledge”的第一条生产化主链，但仍明确保留这些边界：
+v0.9 已完成 Retrieval Governance 的核心运行链，但生产化边界仍保持清晰：
 
-- 每个 Turn 只自动激活一个 Skill；
-- 不自动执行 OpenViking Skill 包中的任意辅助脚本/文件；
-- 结构化 Entity Retriever 和实时 Business Retriever 需要后续按业务系统接入；
-- 多 Knowledge Base 的本体联合推理尚未启用；
-- Workspace Registry / Session state / Audit / Ontology FSRegistry 当前仍是单 Gateway/单实例基线；
-- Control UI 大文件流式上传尚未完成；
-- Memory → Knowledge、Experience → Skill 的 Promotion Gate 尚未进入 v0.8；
-- 完整 CI、HA、全链路 Trace/Eval 仍属于生产化阶段；
-- 完整 OpenClaw `pnpm` bundle / E2E 只有在依赖完整的 CI 环境真实跑通后才能标记通过。
+- Business Retriever 已有稳定接口与通用 HTTP Adapter，具体 MCP/SQL Gateway 由业务系统侧实现；
+- Entity Retriever 当前通过 WeKnora Neo4j 读取，不修改 WeKnora 内核；
+- 多 KB 联合当前聚焦 Semantic Catalog 与 concept-sense conflict，不做跨本体自动推理；
+- Planner v2 仍以确定性语义规则为主，复杂问题可以挂接受约束 Refiner；
+- Workspace Registry / Session State / Audit / Ontology FSRegistry 仍是单实例文件存储基线；
+- Memory → Knowledge、Experience → Skill Promotion 留到 v0.10；
+- 多实例、共享状态、限流/预算/熔断等生产能力留到 v0.11；
+- Trace / Eval / CI / 自动回归发布留到 v0.12。
 
-后续版本应继续在这些边界上增量增强，不回到修改三个上游内核的路线。
+版本演进继续遵循：**先把运行边界和正确性做实，再增加自动学习与生产规模能力。**

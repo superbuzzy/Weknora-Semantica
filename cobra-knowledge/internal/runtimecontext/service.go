@@ -39,6 +39,8 @@ type Service struct {
 	DefaultWeKnoraBaseURL string
 	Registry              ontology.Registry
 	Overlay               retrieval.CatalogOverlay
+	EntitySource          ctxsvc.EntityQuerySource
+	BusinessGateway       ctxsvc.BusinessQuerySource
 }
 
 func (s *Service) weknoraClient(p Principal) (*wk.SearchClient, error) {
@@ -52,18 +54,28 @@ func (s *Service) weknoraClient(p Principal) (*wk.SearchClient, error) {
 	return wk.NewSearchClientWithPrincipal(base, p.WeKnoraAPIKey, p.TenantID, p.UserID), nil
 }
 
-func (s *Service) ontologyFor(ctx context.Context, ids []string) (model.Ontology, bool, error) {
-	if s.Registry == nil || len(ids) != 1 || strings.TrimSpace(ids[0]) == "" {
-		return model.Ontology{}, false, nil
+func (s *Service) ontologiesFor(ctx context.Context, ids []string) ([]ctxsvc.NamespacedOntology, retrieval.SemanticCatalog, error) {
+	items := []ctxsvc.NamespacedOntology{}
+	catalogs := []retrieval.NamespacedCatalog{}
+	if s.Registry == nil {
+		return items, retrieval.SemanticCatalog{}, nil
 	}
-	resolved, err := s.Registry.ResolveForKnowledgeBase(ctx, strings.TrimSpace(ids[0]))
-	if err != nil {
-		if errors.Is(err, ontology.ErrBindingNotFound) || errors.Is(err, ontology.ErrOntologyNotFound) || errors.Is(err, ontology.ErrVersionNotFound) {
-			return model.Ontology{}, false, nil
+	for _, rawID := range ids {
+		kbID := strings.TrimSpace(rawID)
+		if kbID == "" {
+			continue
 		}
-		return model.Ontology{}, false, err
+		resolved, err := s.Registry.ResolveForKnowledgeBase(ctx, kbID)
+		if err != nil {
+			if errors.Is(err, ontology.ErrBindingNotFound) || errors.Is(err, ontology.ErrOntologyNotFound) || errors.Is(err, ontology.ErrVersionNotFound) {
+				continue
+			}
+			return nil, retrieval.SemanticCatalog{}, err
+		}
+		items = append(items, ctxsvc.NamespacedOntology{Namespace: kbID, Ontology: resolved.Ontology})
+		catalogs = append(catalogs, retrieval.NamespacedCatalog{Namespace: kbID, Catalog: retrieval.CompileCatalogWithOverlay(resolved.Ontology, s.Overlay)})
 	}
-	return resolved.Ontology, true, nil
+	return items, retrieval.FederateCatalogs(catalogs), nil
 }
 
 func (s *Service) Retrieve(ctx context.Context, p Principal, in RetrieveRequest) (model.ContextPack, error) {
@@ -75,46 +87,53 @@ func (s *Service) Retrieve(ctx context.Context, p Principal, in RetrieveRequest)
 	if err != nil {
 		return model.ContextPack{}, err
 	}
-	onto, hasOntology, err := s.ontologyFor(ctx, in.KnowledgeBaseIDs)
+	ontologies, catalog, err := s.ontologiesFor(ctx, in.KnowledgeBaseIDs)
 	if err != nil {
-		return model.ContextPack{}, fmt.Errorf("resolve knowledge-base ontology: %w", err)
+		return model.ContextPack{}, fmt.Errorf("resolve knowledge-base ontologies: %w", err)
 	}
-	catalog := retrieval.CompileCatalogWithOverlay(onto, s.Overlay)
+
 	planner := retrieval.NewPlanner(catalog)
-	arbiter := retrieval.NewArbiter(retrieval.ArbitrationPolicyFromOntology(onto, map[string]float64{"business_data": 1.0, "entity_graph": 0.8, "weknora": 0.6}))
+	arbiter := retrieval.NewArbiter(retrieval.ArbitrationPolicy{DefaultSourcePriority: map[string]float64{"business_data": 1.0, "entity_graph": 0.8, "weknora": 0.6}, DefaultDelta: 0.05})
 	service := ctxsvc.NewService(planner, arbiter, ctxsvc.NewAssembler())
 	service.Register(&ctxsvc.WeKnoraRAGRetriever{Client: client, KnowledgeBaseIDs: in.KnowledgeBaseIDs})
-	if hasOntology {
-		service.Register(&ctxsvc.StaticOntologyRetriever{Ontology: onto})
+	if len(ontologies) > 0 {
+		service.Register(&ctxsvc.FederatedOntologyRetriever{Ontologies: ontologies})
 	}
-	req := model.QueryRequest{Query: query, Domain: strings.TrimSpace(in.Domain), Task: strings.TrimSpace(in.Task), Scope: map[string]string{"workspace_id": p.WorkspaceID, "user_id": p.UserID}}
+	if s.EntitySource != nil {
+		service.Register(ctxsvc.NewEntityGraphRuntimeRetriever(s.EntitySource, in.KnowledgeBaseIDs))
+	}
+	if s.BusinessGateway != nil {
+		service.Register(&ctxsvc.BusinessDataRetriever{Gateway: s.BusinessGateway})
+	}
+
+	domain := strings.TrimSpace(in.Domain)
+	if domain == "" && len(ontologies) == 1 {
+		domain = ontologies[0].Ontology.Domain
+	}
+	req := model.QueryRequest{Query: query, Domain: domain, Task: strings.TrimSpace(in.Task), Scope: map[string]string{"workspace_id": p.WorkspaceID, "user_id": p.UserID}}
 	if len(in.KnowledgeBaseIDs) == 1 {
-		req.Scope["knowledge_base_id"] = in.KnowledgeBaseIDs[0]
+		req.Scope["knowledge_base_id"] = strings.TrimSpace(in.KnowledgeBaseIDs[0])
 	}
 	pack, err := service.Retrieve(ctx, req)
 	if err != nil {
 		return model.ContextPack{}, err
 	}
-	// The v0.8 runtime always has an authoritative RAG fallback. Some ontology-driven
-	// plans can target an entity/business retriever that is not yet configured; when
-	// that produces no usable answer, retrieve WeKnora once rather than fabricating facts.
-	if len(pack.Facts) == 0 && len(pack.Knowledge) == 0 && len(pack.Paths) == 0 {
+
+	if pack.Plan.AllowFallback && len(pack.Facts) == 0 && len(pack.Knowledge) == 0 && len(pack.Paths) == 0 {
 		items, ragErr := client.Search(ctx, query, in.KnowledgeBaseIDs, nil)
 		if ragErr == nil && len(items) > 0 {
 			pack.Knowledge = items
 			seen := map[string]bool{}
 			for _, item := range items {
-				for _, ev := range item.Evidence {
-					if !seen[ev.ID] {
-						seen[ev.ID] = true
-						pack.Evidence = append(pack.Evidence, ev)
+				for _, evidence := range item.Evidence {
+					if evidence.ID != "" && !seen[evidence.ID] {
+						seen[evidence.ID] = true
+						pack.Evidence = append(pack.Evidence, evidence)
 					}
 				}
 			}
-			// RAG fallback is supporting evidence, not a substitute for a required
-			// structured/live source. Preserve the original gaps and incomplete flag
-			// so the agent cannot mistake documentary evidence for a live business fact.
-			pack.Plan.Steps = append(pack.Plan.Steps, model.RetrievalStep{ID: "fallback-rag", Source: model.SourceWikiRAG, Operation: "search_knowledge", Query: query, Purpose: "结构化检索无可用事实，补充当前 Workspace 的 WeKnora 权威文档证据；不消除原结构化数据缺口"})
+			pack.Plan.Steps = append(pack.Plan.Steps, model.RetrievalStep{ID: "fallback-rag", Source: model.SourceWikiRAG, Operation: "search_knowledge", Query: query, Purpose: "结构化必要来源无结果时补充当前 Workspace 的权威文档证据", Required: false})
+			pack.SourceStatus = append(pack.SourceStatus, model.SourceStatus{StepID: "fallback-rag", Source: model.SourceWikiRAG, Required: false, Satisfied: true})
 		}
 	}
 	return pack, nil

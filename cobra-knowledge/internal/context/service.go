@@ -51,6 +51,7 @@ func (s *Service) Retrieve(ctx context.Context, req model.QueryRequest) (model.C
 	}
 
 	type item struct {
+		step   model.RetrievalStep
 		result model.RetrievalResult
 		err    error
 	}
@@ -59,32 +60,48 @@ func (s *Service) Retrieve(ctx context.Context, req model.QueryRequest) (model.C
 	for _, step := range plan.Steps {
 		r, ok := s.Retrievers[step.Source]
 		if !ok {
-			ch <- item{result: model.RetrievalResult{Source: step.Source, Gaps: []string{"retriever not configured: " + string(step.Source)}}}
+			ch <- item{step: step, result: model.RetrievalResult{StepID: step.ID, Source: step.Source, Required: step.Required, Satisfied: false, Gaps: []string{"retriever not configured: " + string(step.Source)}}}
 			continue
 		}
 		wg.Add(1)
 		go func(r Retriever, step model.RetrievalStep) {
 			defer wg.Done()
 			res, err := r.Retrieve(ctx, req, step)
-			ch <- item{result: res, err: err}
+			ch <- item{step: step, result: res, err: err}
 		}(r, step)
 	}
 	wg.Wait()
 	close(ch)
-	var results []model.RetrievalResult
-	var assertions []model.Assertion
-	for x := range ch {
-		if x.err != nil {
-			results = append(results, model.RetrievalResult{Source: x.result.Source, Gaps: []string{x.err.Error()}})
+
+	results := make([]model.RetrievalResult, 0, len(plan.Steps))
+	assertions := []model.Assertion{}
+	for item := range ch {
+		res := item.result
+		res.StepID = item.step.ID
+		res.Source = item.step.Source
+		res.Required = item.step.Required
+		if item.err != nil {
+			res.Satisfied = false
+			res.Gaps = append(res.Gaps, item.err.Error())
+			results = append(results, res)
 			continue
 		}
-		results = append(results, x.result)
-		assertions = append(assertions, x.result.Assertions...)
+		res.Satisfied = hasUsableResult(res)
+		if !res.Satisfied && len(res.Gaps) == 0 {
+			res.Gaps = append(res.Gaps, "source returned no usable result: "+string(res.Source))
+		}
+		results = append(results, res)
+		assertions = append(assertions, res.Assertions...)
 	}
-	qt := time.Now().UTC()
+
+	queryTime := time.Now().UTC()
 	if req.At != nil {
-		qt = req.At.UTC()
+		queryTime = req.At.UTC()
 	}
-	arbitration := s.Arbiter.Arbitrate(assertions, qt)
+	arbitration := s.Arbiter.Arbitrate(assertions, queryTime)
 	return s.Assembler.Assemble(plan, results, arbitration), nil
+}
+
+func hasUsableResult(res model.RetrievalResult) bool {
+	return len(res.Assertions) > 0 || len(res.Knowledge) > 0 || len(res.Paths) > 0
 }

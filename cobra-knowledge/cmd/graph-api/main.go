@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cobraknowledge.local/cobra-knowledge/internal/access"
+	businessadapter "cobraknowledge.local/cobra-knowledge/internal/adapters/business"
 	"cobraknowledge.local/cobra-knowledge/internal/graphview"
 	"cobraknowledge.local/cobra-knowledge/internal/httpapi"
 	ontsvc "cobraknowledge.local/cobra-knowledge/internal/ontology"
@@ -25,6 +26,8 @@ func main() {
 	neo4jUser := flag.String("neo4j-user", envOr("COBRA_NEO4J_USER", "neo4j"), "Neo4j username")
 	neo4jPassword := flag.String("neo4j-password", os.Getenv("COBRA_NEO4J_PASSWORD"), "Neo4j password")
 	weknoraURL := flag.String("weknora-url", os.Getenv("COBRA_WEKNORA_BASE_URL"), "WeKnora base URL for RBAC delegation")
+	businessURL := flag.String("business-gateway-url", os.Getenv("LEECLAW_BUSINESS_GATEWAY_URL"), "optional business data gateway base URL")
+	businessToken := flag.String("business-gateway-token", os.Getenv("LEECLAW_BUSINESS_GATEWAY_TOKEN"), "optional business data gateway bearer token")
 	authMode := flag.String("auth", envOr("COBRA_GRAPH_AUTH_MODE", "weknora"), "authorization mode: weknora or off")
 	registryAdminToken := flag.String("registry-admin-token", os.Getenv("COBRA_REGISTRY_ADMIN_TOKEN"), "admin token for ontology registry mutation/read APIs")
 	allowedOrigin := flag.String("cors-origin", os.Getenv("COBRA_GRAPH_CORS_ORIGIN"), "optional allowed CORS origin; prefer same-origin reverse proxy")
@@ -58,7 +61,11 @@ func main() {
 			log.Fatalf("load catalog overlay: %v", err)
 		}
 	}
-	runtimeService := &runtimecontext.Service{DefaultWeKnoraBaseURL: *weknoraURL, Registry: registry, Overlay: overlay}
+	runtimeService := &runtimecontext.Service{DefaultWeKnoraBaseURL: *weknoraURL, Registry: registry, Overlay: overlay, EntitySource: entitySource}
+	if strings.TrimSpace(*businessURL) != "" {
+		runtimeService.BusinessGateway = businessadapter.NewHTTPGateway(*businessURL, *businessToken)
+		log.Printf("business data retriever enabled: %s", strings.TrimSpace(*businessURL))
+	}
 	if strings.TrimSpace(*runtimeToken) == "" {
 		log.Print("runtime context API disabled: LEECLAW_RUNTIME_TOKEN is not configured")
 	}
@@ -82,7 +89,7 @@ func main() {
 		WriteTimeout:      20 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("LeeClaw Core API v0.8 listening on %s; registry=%s", *listen, *registryRoot)
+	log.Printf("LeeClaw Core API v0.9 listening on %s; registry=%s", *listen, *registryRoot)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
