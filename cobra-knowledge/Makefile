@@ -12,7 +12,7 @@ plugin-test:
 	node --test integrations/openclaw/openviking-plugin/test/*.test.js
 
 verify:
-	./scripts/verify-v0.8.sh
+	./scripts/verify-v0.10.sh
 
 build:
 	mkdir -p bin
